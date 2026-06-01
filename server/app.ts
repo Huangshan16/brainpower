@@ -9,12 +9,16 @@ import cors from "cors";
 import express from "express";
 import { config } from "./config.js";
 import { createLogger } from "./logger.js";
+import { createConversationRoutes } from "./routes/conversationRoutes.js";
 import { createHealthRoutes } from "./routes/healthRoutes.js";
 import { createEvaluationRoutes } from "./routes/evaluationRoutes.js";
 import { createLibraryRoutes } from "./routes/libraryRoutes.js";
 import { createPersonaRoutes } from "./routes/personaRoutes.js";
 import { createResearchRoutes } from "./routes/researchRoutes.js";
 import { createSkillRoutes } from "./routes/skillRoutes.js";
+import { createConversationRunService } from "./services/conversationRunService.js";
+import { createConversationService } from "./services/conversationService.js";
+import { createDistillationService } from "./services/distillationService.js";
 import { createEvaluationService } from "./services/evaluationService.js";
 import { createLibraryService } from "./services/libraryService.js";
 import { createModelService } from "./services/modelService.js";
@@ -34,6 +38,9 @@ export function createApp({ db, nuwaGateway: nuwaGatewayOptions }: AppOptions) {
   const app = express();
   const appLogger = createLogger("app");
   const library = createLibraryService(db);
+  const conversations = createConversationService(db);
+  const distillation = createDistillationService(db);
+  const conversationRuns = createConversationRunService({ db, conversations, distillation });
   const personaLibrary = createPersonaLibraryService(db);
   const model = createModelService({
     baseUrl: config.modelBaseUrl,
@@ -62,6 +69,7 @@ export function createApp({ db, nuwaGateway: nuwaGatewayOptions }: AppOptions) {
   app.use(express.json());
   app.use("/api", createHealthRoutes());
   app.use("/api", createLibraryRoutes(library));
+  app.use("/api", createConversationRoutes(conversations, conversationRuns));
   app.use("/api", createPersonaRoutes(personaLibrary, nuwaGateway));
   app.use("/api", createResearchRoutes(research));
   app.use("/api", createSkillRoutes(skillService));
@@ -70,6 +78,7 @@ export function createApp({ db, nuwaGateway: nuwaGatewayOptions }: AppOptions) {
     routes: [
       "/api/health",
       "/api/people",
+      "/api/conversations",
       "/api/personas",
       "/api/personas/import/nuwa",
       "/api/research/crawl",

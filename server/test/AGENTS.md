@@ -3,7 +3,9 @@
 > L2 | 父级: ../AGENTS.md
 
 成员清单
-app.test.ts: Vitest Express 应用路由测试，验证 health、people list/create、persona import 失败语义与 400 JSON 输入验证契约
+app.test.ts: Vitest Express 应用路由测试，验证 health、people、persona import 与 conversation group run 的 HTTP 契约
+conversationRunService.test.ts: Vitest 会话运行测试，验证 direct/group run、stop 与消息保留语义
+conversationService.test.ts: Vitest 会话服务测试，验证 conversation/participant/message 的最小持久化闭环
 db.test.ts: Vitest 数据库契约测试，验证迁移创建核心表、升级旧 people 结构并收敛 legacy origin_ref
 evaluationService.test.ts: Vitest 评审服务测试，验证 evaluation 与 critique 记录持久化
 libraryService.test.ts: Vitest 资料库服务测试，验证人物、来源、片段、归属不变量与 DB 行到 shared schema 映射

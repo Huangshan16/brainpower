@@ -1,3 +1,9 @@
+/*
+ * [INPUT]: 依赖 SQLite DDL 语法与 better-sqlite3 migrate 执行器
+ * [OUTPUT]: 对外提供 people/sources/fragments/skills/evaluations/critiques/jobs/conversations/messages/conversation_runs 的建表语句
+ * [POS]: server/db 的机器相骨架，被 migrate.ts 执行并定义后端持久化边界
+ * [PROTOCOL]: 变更时更新此头部，然后检查 AGENTS.md
+ */
 create table if not exists people (
   id text primary key,
   name text not null,
@@ -105,4 +111,28 @@ create table if not exists conversation_participants (
   position integer not null check (position >= 0),
   is_active integer not null default 1 check (is_active in (0, 1)),
   primary key (conversation_id, person_id, skill_id)
+);
+
+create table if not exists messages (
+  id text primary key,
+  conversation_id text not null references conversations(id) on delete cascade,
+  sender_type text not null check (sender_type in ('user', 'persona', 'system')),
+  sender_id text not null,
+  content text not null,
+  round_index integer not null check (round_index >= 0),
+  reply_to_message_id text references messages(id) on delete set null,
+  meta_json text not null default '{}',
+  created_at text not null
+);
+
+create table if not exists conversation_runs (
+  id text primary key,
+  conversation_id text not null references conversations(id) on delete cascade,
+  mode text not null check (mode in ('direct', 'group')),
+  status text not null check (status in ('running', 'stopped', 'completed', 'failed')),
+  message_id text not null references messages(id) on delete cascade,
+  speaker_person_id text references people(id) on delete set null,
+  stop_reason text,
+  created_at text not null,
+  updated_at text not null
 );

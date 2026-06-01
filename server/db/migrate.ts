@@ -1,6 +1,6 @@
 /**
  * [INPUT]: 依赖 fs 读取 schema.sql，依赖 better-sqlite3 执行 DDL
- * [OUTPUT]: 对外提供 migrate 函数，按需补齐旧库缺失的添加性字段、归一化 persona origin_ref，并重建 conversation_participants 以补齐外键与检查约束
+ * [OUTPUT]: 对外提供 migrate 函数，按需补齐旧库缺失的添加性字段、归一化 persona origin_ref，并重建 conversation_participants/messages/conversation_runs 以补齐约束
  * [POS]: server/db 的 schema 初始化器，被启动流程与测试消费
  * [PROTOCOL]: 变更时更新此头部，然后检查 AGENTS.md
  */
@@ -57,6 +57,9 @@ export function migrate(db: Database.Database) {
   if (!hasParticipantForeignKeys || !hasParticipantChecks) {
     rebuildConversationParticipants(db);
   }
+
+  ensureMessagesTable(db);
+  ensureConversationRunsTable(db);
 
   db.exec(`
     create trigger if not exists people_validate_persona_metadata_insert
@@ -221,6 +224,177 @@ function rebuildConversationParticipants(db: Database.Database) {
       where row_number = 1;
     `);
     db.exec("drop table conversation_participants_legacy");
+  });
+
+  rebuild();
+}
+
+function ensureMessagesTable(db: Database.Database) {
+  const schema = db.prepare("select sql from sqlite_master where type = 'table' and name = 'messages'").get() as
+    | { sql: string | null }
+    | undefined;
+
+  if (!schema) {
+    db.exec(`
+      create table messages (
+        id text primary key,
+        conversation_id text not null references conversations(id) on delete cascade,
+        sender_type text not null check (sender_type in ('user', 'persona', 'system')),
+        sender_id text not null,
+        content text not null,
+        round_index integer not null check (round_index >= 0),
+        reply_to_message_id text references messages(id) on delete set null,
+        meta_json text not null default '{}',
+        created_at text not null
+      );
+    `);
+    return;
+  }
+
+  const sql = (schema.sql ?? "").toLowerCase();
+  const valid =
+    sql.includes("references conversations(id)") &&
+    sql.includes("sender_type") &&
+    sql.includes("check (sender_type in ('user', 'persona', 'system'))") &&
+    sql.includes("check (round_index >= 0)") &&
+    sql.includes("meta_json");
+
+  if (!valid) {
+    rebuildMessagesTable(db);
+  }
+}
+
+function rebuildMessagesTable(db: Database.Database) {
+  const rebuild = db.transaction(() => {
+    db.exec("drop table if exists messages_legacy");
+    db.exec("alter table messages rename to messages_legacy");
+    db.exec(`
+      create table messages (
+        id text primary key,
+        conversation_id text not null references conversations(id) on delete cascade,
+        sender_type text not null check (sender_type in ('user', 'persona', 'system')),
+        sender_id text not null,
+        content text not null,
+        round_index integer not null check (round_index >= 0),
+        reply_to_message_id text references messages(id) on delete set null,
+        meta_json text not null default '{}',
+        created_at text not null
+      );
+    `);
+    db.exec(`
+      insert into messages (
+        id,
+        conversation_id,
+        sender_type,
+        sender_id,
+        content,
+        round_index,
+        reply_to_message_id,
+        meta_json,
+        created_at
+      )
+      select
+        id,
+        conversation_id,
+        sender_type,
+        sender_id,
+        content,
+        round_index,
+        reply_to_message_id,
+        coalesce(meta_json, '{}'),
+        created_at
+      from messages_legacy
+      where sender_type in ('user', 'persona', 'system')
+        and round_index >= 0;
+    `);
+    db.exec("drop table messages_legacy");
+  });
+
+  rebuild();
+}
+
+function ensureConversationRunsTable(db: Database.Database) {
+  const schema = db.prepare("select sql from sqlite_master where type = 'table' and name = 'conversation_runs'").get() as
+    | { sql: string | null }
+    | undefined;
+
+  if (!schema) {
+    db.exec(`
+      create table conversation_runs (
+        id text primary key,
+        conversation_id text not null references conversations(id) on delete cascade,
+        mode text not null check (mode in ('direct', 'group')),
+        status text not null check (status in ('running', 'stopped', 'completed', 'failed')),
+        message_id text not null references messages(id) on delete cascade,
+        speaker_person_id text references people(id) on delete set null,
+        stop_reason text,
+        created_at text not null,
+        updated_at text not null
+      );
+    `);
+    return;
+  }
+
+  const sql = (schema.sql ?? "").toLowerCase();
+  const valid =
+    sql.includes("references conversations(id)") &&
+    sql.includes("references messages(id)") &&
+    sql.includes("check (mode in ('direct', 'group'))") &&
+    sql.includes("check (status in ('running', 'stopped', 'completed', 'failed'))");
+
+  if (!valid) {
+    rebuildConversationRunsTable(db);
+  }
+}
+
+function rebuildConversationRunsTable(db: Database.Database) {
+  const rebuild = db.transaction(() => {
+    db.exec("drop table if exists conversation_runs_legacy");
+    db.exec("alter table conversation_runs rename to conversation_runs_legacy");
+    db.exec(`
+      create table conversation_runs (
+        id text primary key,
+        conversation_id text not null references conversations(id) on delete cascade,
+        mode text not null check (mode in ('direct', 'group')),
+        status text not null check (status in ('running', 'stopped', 'completed', 'failed')),
+        message_id text not null references messages(id) on delete cascade,
+        speaker_person_id text references people(id) on delete set null,
+        stop_reason text,
+        created_at text not null,
+        updated_at text not null
+      );
+    `);
+    db.exec(`
+      insert into conversation_runs (
+        id,
+        conversation_id,
+        mode,
+        status,
+        message_id,
+        speaker_person_id,
+        stop_reason,
+        created_at,
+        updated_at
+      )
+      select
+        legacy.id,
+        legacy.conversation_id,
+        legacy.mode,
+        legacy.status,
+        legacy.message_id,
+        legacy.speaker_person_id,
+        legacy.stop_reason,
+        legacy.created_at,
+        legacy.updated_at
+      from conversation_runs_legacy legacy
+      join conversations on conversations.id = legacy.conversation_id
+      join messages on messages.id = legacy.message_id
+      left join people on people.id = legacy.speaker_person_id
+      where legacy.mode in ('direct', 'group')
+        and legacy.status in ('running', 'stopped', 'completed', 'failed')
+        and (legacy.speaker_person_id is null or people.id is not null);
+    `);
+    db.exec("drop table conversation_runs_legacy");
   });
 
   rebuild();

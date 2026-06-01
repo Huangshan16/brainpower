@@ -3,6 +3,7 @@
 > L2 | 父级: ../AGENTS.md
 
 成员清单
+conversationRoutes.ts: express Router 会话端点，用 Zod 验证 conversation/participant/message/run payload 并委派 conversationService/conversationRunService
 evaluationRoutes.ts: express Router 评审与 critique 端点，用 Zod 验证 POST /evaluations 与 POST /critiques 并委派 evaluationService
 healthRoutes.ts: express Router 健康检查端点，返回本地服务存活状态
 libraryRoutes.ts: express Router 资料库端点，用 Zod 验证 POST /people 并委派 libraryService 处理 people 与 fragments
