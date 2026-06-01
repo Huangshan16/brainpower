@@ -1,0 +1,56 @@
+<h2>分表 · 分服务 · 分 UI 面板</h2>
+<p class="subtitle">每个边界只做一件事：采集不蒸馏，蒸馏不评审，评审不改资料。数据流单向，复杂度才不会倒灌。</p>
+
+<div class="split">
+  <div class="mockup">
+    <div class="mockup-header">UI Panels</div>
+    <div class="mockup-body">
+      <div style="display:grid;grid-template-columns:220px 1fr 300px;gap:10px;min-height:360px">
+        <div class="placeholder">
+          <div class="label">Matrix</div>
+          <h3>人物库</h3>
+          <p>投资人 / 企业家 / AI 牛人</p>
+          <p>状态：缺资料、待蒸馏、可评审</p>
+        </div>
+        <div class="placeholder">
+          <div class="label">Workspace</div>
+          <h3>当前任务</h3>
+          <p>Research：配置采集任务</p>
+          <p>Distill：从来源片段生成 Skill</p>
+          <p>Evaluate：输入项目并发起矩阵评审</p>
+        </div>
+        <div class="placeholder">
+          <div class="label">Evidence</div>
+          <h3>证据与输出</h3>
+          <p>来源列表、正文片段、Skill 引用、投决结论、反驳链。</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="mockup">
+    <div class="mockup-header">Database Tables</div>
+    <div class="mockup-body">
+      <div class="placeholder"><b>people</b>：人物身份、类别、标签、状态</div>
+      <div class="placeholder"><b>sources</b>：URL、标题、来源类型、可信度、抓取状态</div>
+      <div class="placeholder"><b>fragments</b>：正文片段、摘要、时间线标签、人物关联</div>
+      <div class="placeholder"><b>skills</b>：心智模型、启发式、表达 DNA、反模式、边界</div>
+      <div class="placeholder"><b>evaluations</b>：项目快照、评审人、结论、分数、理由</div>
+      <div class="placeholder"><b>critiques</b>：谁反驳谁、针对哪条评审、反驳内容</div>
+      <div class="placeholder"><b>jobs</b>：采集、蒸馏、评审任务状态与错误</div>
+    </div>
+  </div>
+</div>
+
+<div class="mockup">
+  <div class="mockup-header">Backend Services</div>
+  <div class="mockup-body">
+    <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:10px">
+      <div class="placeholder"><b>researchService</b><br>搜索、抓取、正文抽取</div>
+      <div class="placeholder"><b>libraryService</b><br>人物、来源、片段读写</div>
+      <div class="placeholder"><b>skillService</b><br>资料蒸馏与引用回写</div>
+      <div class="placeholder"><b>evaluationService</b><br>矩阵评审与投决结论</div>
+      <div class="placeholder"><b>modelService</b><br>OpenAI 兼容调用与重试</div>
+    </div>
+  </div>
+</div>

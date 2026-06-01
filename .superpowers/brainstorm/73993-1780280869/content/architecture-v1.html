@@ -1,0 +1,55 @@
+<h2>首版架构：本地后端代理 + AI 矩阵工作台</h2>
+<p class="subtitle">目标是把 API key、模型调用、蒸馏流程和前端体验分开，避免一个大组件吞掉整个产品。</p>
+
+<div class="mockup">
+  <div class="mockup-header">System Map</div>
+  <div class="mockup-body">
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;align-items:stretch">
+      <div class="placeholder" style="min-height:170px">
+        <div class="label">Frontend</div>
+        <h3>Matrix Console</h3>
+        <p>项目输入、人物矩阵、Skill 编辑器、评审结果、交叉批判时间线。</p>
+      </div>
+      <div class="placeholder" style="min-height:170px">
+        <div class="label">Backend</div>
+        <h3>AI Proxy</h3>
+        <p>保存运行期配置、封装模型调用、构造 persona prompt、聚合评审任务。</p>
+      </div>
+      <div class="placeholder" style="min-height:170px">
+        <div class="label">Model</div>
+        <h3>LLM Provider</h3>
+        <p>OpenAI 兼容接口优先；后续可替换为 Anthropic、Gemini 或本地模型。</p>
+      </div>
+    </div>
+
+    <div style="margin-top:18px;display:grid;grid-template-columns:1fr 1fr;gap:14px">
+      <div class="placeholder">
+        <div class="label">Skill Layer</div>
+        <p>人物资料 → 心智模型 → 决策启发式 → 表达 DNA → 反模式 → 诚实边界。</p>
+      </div>
+      <div class="placeholder">
+        <div class="label">Evaluation Layer</div>
+        <p>投/不投、对事判断、对人判断、关键风险、尖锐质询、反驳链路。</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="pros-cons">
+  <div class="pros">
+    <h4>取这个架构的理由</h4>
+    <ul>
+      <li>API key 不暴露在前端 bundle。</li>
+      <li>模型供应商以后能替换。</li>
+      <li>蒸馏和评审是两个清晰边界。</li>
+    </ul>
+  </div>
+  <div class="cons">
+    <h4>首版克制</h4>
+    <ul>
+      <li>不做自动全网爬取，先支持粘贴资料和来源记录。</li>
+      <li>不做账号系统，数据先存浏览器本地。</li>
+      <li>不假装数字人物等于真人真实想法。</li>
+    </ul>
+  </div>
+</div>
