@@ -23,12 +23,19 @@ const ROLE_BY_NAME: Record<string, Persona["role"]> = {
   karpathy: "ai_builder",
   "ilya sutskever": "ai_builder",
   "elon musk": "entrepreneur",
+  "马斯克": "entrepreneur",
   "steve jobs": "entrepreneur",
+  "乔布斯": "entrepreneur",
   naval: "investor",
+  "纳瓦尔": "investor",
   munger: "investor",
+  "芒格": "investor",
   taleb: "investor",
+  "塔勒布": "investor",
   feynman: "ai_builder",
+  "费曼": "ai_builder",
   trump: "entrepreneur",
+  "特朗普": "entrepreneur",
   mrbeast: "entrepreneur"
 };
 
