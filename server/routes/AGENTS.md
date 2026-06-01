@@ -1,0 +1,11 @@
+# server/routes/
+
+> L2 | 父级: ../AGENTS.md
+
+成员清单
+healthRoutes.ts: express Router 健康检查端点，返回本地服务存活状态
+libraryRoutes.ts: express Router 资料库端点，委派 libraryService 处理 people 与 fragments
+
+法则: 成员完整·一行一文件·父级链接·技术词前置
+
+[PROTOCOL]: 变更时更新此头部，然后检查 AGENTS.md
