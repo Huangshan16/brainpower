@@ -11,6 +11,7 @@ db/connection.ts: better-sqlite3 连接边界，开启 foreign_keys 并返回同
 db/migrate.ts: SQLite schema 初始化器，读取 schema.sql 并执行 DDL
 db/schema.sql: Digital Mentor Matrix 核心 SQLite DDL，定义七张本地优先业务表
 index.ts: Node 进程入口，创建数据库、执行迁移并启动 Express 服务
+logger.ts: 结构化日志边界，统一输出后端 request/service/model 调试事件
 routes/: Express 路由模块，承载薄 HTTP 边界并委派服务层
 routes/evaluationRoutes.ts: 评审与 critique 路由，提供 POST /api/evaluations 与 POST /api/critiques 入口
 routes/healthRoutes.ts: 健康检查路由，提供 GET /api/health

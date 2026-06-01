@@ -8,6 +8,7 @@ import type Database from "better-sqlite3";
 import cors from "cors";
 import express from "express";
 import { config } from "./config.js";
+import { createLogger } from "./logger.js";
 import { createHealthRoutes } from "./routes/healthRoutes.js";
 import { createEvaluationRoutes } from "./routes/evaluationRoutes.js";
 import { createLibraryRoutes } from "./routes/libraryRoutes.js";
@@ -25,11 +26,13 @@ type AppOptions = {
 
 export function createApp({ db }: AppOptions) {
   const app = express();
+  const appLogger = createLogger("app");
   const library = createLibraryService(db);
   const model = createModelService({
     baseUrl: config.modelBaseUrl,
     apiKey: config.modelApiKey,
     modelName: config.modelName,
+    logger: createLogger("modelService"),
     timeoutMs: config.modelTimeoutMs
   });
   const research = createResearchService({
@@ -45,7 +48,7 @@ export function createApp({ db }: AppOptions) {
     }
   });
   const skillService = createSkillService({ db, library, model });
-  const evaluationService = createEvaluationService({ db, model });
+  const evaluationService = createEvaluationService({ db, logger: createLogger("evaluationService"), model });
 
   app.use(cors());
   app.use(express.json());
@@ -54,6 +57,7 @@ export function createApp({ db }: AppOptions) {
   app.use("/api", createResearchRoutes(research));
   app.use("/api", createSkillRoutes(skillService));
   app.use("/api", createEvaluationRoutes(evaluationService));
+  appLogger.info("app_routes_ready", { routes: ["/api/health", "/api/people", "/api/research/crawl", "/api/skills/distill", "/api/evaluations"] });
 
   return app;
 }

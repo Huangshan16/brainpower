@@ -7,7 +7,7 @@
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { describe, expect, test } from "vitest";
+import { describe, expect, test, vi } from "vitest";
 import { openDatabase } from "../db/connection.js";
 import { migrate } from "../db/migrate.js";
 import { createEvaluationService } from "../services/evaluationService.js";
@@ -46,6 +46,53 @@ describe("evaluationService", () => {
 
       expect(evaluation.verdict).toBe("pass");
       expect(critique.evaluationId).toBe(evaluation.id);
+    } finally {
+      db.close();
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("logs context and fails early when the model omits required evaluation fields", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "brainpower-eval-"));
+    const db = openDatabase(join(dir, "test.sqlite"));
+    const logger = {
+      info: vi.fn(),
+      warn: vi.fn(),
+      error: vi.fn()
+    };
+
+    try {
+      migrate(db);
+      const model = {
+        completeJson: async () =>
+          JSON.stringify({
+            verdict: "pass",
+            businessJudgment: "market exists but wedge is weak",
+            risks: ["distribution"],
+            questions: ["why now"],
+            score: { conviction: 42 }
+          })
+      };
+      const service = createEvaluationService({ db, logger, model });
+
+      await expect(
+        service.evaluateProject(
+          {
+            project: { title: "AI founder OS", brief: "A cognition tool for founders." },
+            personId: "person_a",
+            skillId: "skill_a"
+          },
+          { requestId: "req_eval_missing_field" }
+        )
+      ).rejects.toThrow(/missing required fields: personJudgment/i);
+
+      expect(logger.error).toHaveBeenCalledWith(
+        "evaluation_payload_invalid",
+        expect.objectContaining({
+          requestId: "req_eval_missing_field",
+          missingFields: ["personJudgment"]
+        })
+      );
     } finally {
       db.close();
       rmSync(dir, { recursive: true, force: true });

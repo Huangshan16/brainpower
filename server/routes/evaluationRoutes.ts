@@ -5,7 +5,9 @@
  * [PROTOCOL]: 变更时更新此头部，然后检查 AGENTS.md
  */
 import { Router } from "express";
+import { nanoid } from "nanoid";
 import { z } from "zod";
+import { createLogger } from "../logger.js";
 import type { createEvaluationService } from "../services/evaluationService.js";
 
 type EvaluationService = ReturnType<typeof createEvaluationService>;
@@ -27,18 +29,37 @@ const CritiqueInputSchema = z.object({
 
 export function createEvaluationRoutes(evaluationService: EvaluationService) {
   const router = Router();
+  const logger = createLogger("evaluationRoutes");
 
   router.post("/evaluations", async (req, res) => {
+    const requestId = nanoid();
     const input = EvaluateInputSchema.safeParse(req.body);
 
     if (!input.success) {
+      logger.warn("evaluation_request_invalid", { requestId, issues: input.error.issues });
       res.status(400).json({ error: "Invalid evaluation payload" });
       return;
     }
 
     try {
-      res.status(201).json(await evaluationService.evaluateProject(input.data));
+      logger.info("evaluation_request_received", {
+        requestId,
+        personId: input.data.personId,
+        projectTitle: input.data.project.title,
+        skillId: input.data.skillId
+      });
+      const evaluation = await evaluationService.evaluateProject(input.data, { requestId });
+      logger.info("evaluation_request_succeeded", {
+        requestId,
+        evaluationId: evaluation.id,
+        verdict: evaluation.verdict
+      });
+      res.status(201).json(evaluation);
     } catch (error) {
+      logger.error("evaluation_request_failed", {
+        requestId,
+        message: error instanceof Error ? error.message : "Evaluation failed"
+      });
       res.status(500).json({ error: error instanceof Error ? error.message : "Evaluation failed" });
     }
   });

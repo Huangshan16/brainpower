@@ -7,6 +7,7 @@
 import type Database from "better-sqlite3";
 import { nanoid } from "nanoid";
 import { CritiqueSchema, EvaluationSchema, type Critique, type Evaluation } from "../../shared/schemas.js";
+import { createLogger, type Logger } from "../logger.js";
 import type { createModelService } from "./modelService.js";
 
 type ModelService = ReturnType<typeof createModelService>;
@@ -40,6 +41,28 @@ function now() {
   return new Date().toISOString();
 }
 
+type EvaluationPayload = {
+  verdict: "invest" | "pass" | "needs_more_evidence";
+  personJudgment: string;
+  businessJudgment: string;
+  risks: string[];
+  questions: string[];
+  score: Record<string, number>;
+};
+
+function findMissingEvaluationFields(parsed: Partial<EvaluationPayload>) {
+  const missing: string[] = [];
+
+  if (!parsed.verdict) missing.push("verdict");
+  if (!parsed.personJudgment) missing.push("personJudgment");
+  if (!parsed.businessJudgment) missing.push("businessJudgment");
+  if (!Array.isArray(parsed.risks)) missing.push("risks");
+  if (!Array.isArray(parsed.questions)) missing.push("questions");
+  if (!parsed.score || typeof parsed.score !== "object") missing.push("score");
+
+  return missing;
+}
+
 function mapEvaluation(row: EvaluationRow): Evaluation {
   return EvaluationSchema.parse({
     id: row.id,
@@ -69,45 +92,88 @@ function mapCritique(row: CritiqueRow): Critique {
   });
 }
 
-export function createEvaluationService({ db, model }: { db: Database.Database; model: ModelService }) {
+export function createEvaluationService({
+  db,
+  logger = createLogger("evaluationService"),
+  model
+}: {
+  db: Database.Database;
+  logger?: Logger;
+  model: ModelService;
+}) {
   return {
-    async evaluateProject(input: { project: { title: string; brief: string }; personId: string; skillId: string }) {
+    async evaluateProject(
+      input: { project: { title: string; brief: string }; personId: string; skillId: string },
+      context: { requestId?: string } = {}
+    ) {
+      const logContext = {
+        requestId: context.requestId ?? "no_request_id",
+        personId: input.personId,
+        projectTitle: input.project.title,
+        skillId: input.skillId
+      };
+
+      logger.info("evaluation_started", logContext);
       const raw = await model.completeJson(
         "Evaluate the startup brief as a sharp digital mentor. Return JSON only.",
-        `${input.project.title}\n\n${input.project.brief}`
+        `${input.project.title}\n\n${input.project.brief}`,
+        logContext
       );
-      const parsed = JSON.parse(raw) as {
-        verdict: "invest" | "pass" | "needs_more_evidence";
-        personJudgment: string;
-        businessJudgment: string;
-        risks: string[];
-        questions: string[];
-        score: Record<string, number>;
-      };
+      const parsed = JSON.parse(raw) as Partial<EvaluationPayload>;
+      const missingFields = findMissingEvaluationFields(parsed);
+
+      if (missingFields.length > 0) {
+        logger.error("evaluation_payload_invalid", {
+          ...logContext,
+          missingFields,
+          parsedKeys: Object.keys(parsed),
+          rawModelPayloadPreview: raw
+        });
+        throw new Error(`Evaluation payload missing required fields: ${missingFields.join(", ")}`);
+      }
+
       const id = nanoid();
       const createdAt = now();
 
-      db.prepare(
-        `insert into evaluations (
-          id, project_title, project_brief, skill_id, person_id, verdict,
-          person_judgment, business_judgment, risks_json, questions_json, score_json, created_at
-        ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-      ).run(
-        id,
-        input.project.title,
-        input.project.brief,
-        input.skillId,
-        input.personId,
-        parsed.verdict,
-        parsed.personJudgment,
-        parsed.businessJudgment,
-        JSON.stringify(parsed.risks),
-        JSON.stringify(parsed.questions),
-        JSON.stringify(parsed.score),
-        createdAt
-      );
+      try {
+        db.prepare(
+          `insert into evaluations (
+            id, project_title, project_brief, skill_id, person_id, verdict,
+            person_judgment, business_judgment, risks_json, questions_json, score_json, created_at
+          ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+        ).run(
+          id,
+          input.project.title,
+          input.project.brief,
+          input.skillId,
+          input.personId,
+          parsed.verdict,
+          parsed.personJudgment,
+          parsed.businessJudgment,
+          JSON.stringify(parsed.risks),
+          JSON.stringify(parsed.questions),
+          JSON.stringify(parsed.score),
+          createdAt
+        );
+      } catch (error) {
+        logger.error("evaluation_db_insert_failed", {
+          ...logContext,
+          evaluationId: id,
+          message: error instanceof Error ? error.message : "Unknown database error",
+          parsedPayload: parsed
+        });
+        throw error;
+      }
 
-      return mapEvaluation(db.prepare("select * from evaluations where id = ?").get(id) as EvaluationRow);
+      const evaluation = mapEvaluation(db.prepare("select * from evaluations where id = ?").get(id) as EvaluationRow);
+
+      logger.info("evaluation_succeeded", {
+        ...logContext,
+        evaluationId: id,
+        verdict: evaluation.verdict
+      });
+
+      return evaluation;
     },
 
     async critiqueEvaluation(input: { evaluationId: string; criticPersonId: string; targetPersonId: string }) {
