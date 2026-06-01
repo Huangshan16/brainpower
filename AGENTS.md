@@ -13,6 +13,7 @@ e2e/ - Playwright 浏览器验收用例与逐步录证截图附件 (0子目录)
 <config>
 AGENTS.md - L1 项目宪法，记录顶层目录、技术栈与文档协议
 README.md - 项目开源首页文档，说明定位、能力边界、快速开始与协作方式
+LICENSE - 项目开源许可证，当前采用 MIT License
 package.json - Node 工程脚本、运行依赖与开发依赖清单
 index.html - Vite 前端入口 HTML，提供 #root 挂载点
 vite.config.ts - Vite React 与 Vitest 浏览器环境配置

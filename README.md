@@ -64,6 +64,12 @@
 
 如果你要把它当成公开 SaaS 直接上线，技术边界还远远不够。当前更适合本地研究型工具与开源原型演进。
 
+## 开源许可
+
+本项目采用 `MIT License`。
+
+你可以自由使用、修改、分发和二次开发，但需要保留原始版权与许可声明。
+
 ## 技术栈
 
 - 前端：React 19 + TypeScript + Vite
@@ -258,6 +264,10 @@ npm run lint        # TypeScript 类型检查
 - Skill 蒸馏
 - 项目评审
 - 模型代理
+
+## License
+
+详见根目录的 [LICENSE](./LICENSE)。
 
 ### `shared/`
 
