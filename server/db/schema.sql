@@ -15,22 +15,22 @@ create table if not exists sources (
   person_id text not null references people(id) on delete cascade,
   url text not null,
   title text not null,
-  publisher text,
-  published_at text,
-  captured_at text not null,
-  credibility real not null check (credibility >= 0 and credibility <= 1),
-  tags text not null default '[]'
+  source_type text not null,
+  trust_level text not null,
+  crawl_status text not null,
+  fetched_at text,
+  created_at text not null
 );
 
 create table if not exists fragments (
   id text primary key,
-  person_id text not null references people(id) on delete cascade,
   source_id text not null references sources(id) on delete cascade,
-  quote text not null,
+  person_id text not null references people(id) on delete cascade,
+  content text not null,
   summary text not null,
-  topics text not null default '[]',
-  evidence_type text not null check (evidence_type in ('claim', 'decision', 'principle', 'pattern')),
-  confidence real not null check (confidence >= 0 and confidence <= 1)
+  timeline_tag text not null,
+  evidence_type text not null,
+  created_at text not null
 );
 
 create table if not exists skills (
@@ -65,7 +65,7 @@ create table if not exists critiques (
 
 create table if not exists jobs (
   id text primary key,
-  type text not null check (type in ('research', 'distill', 'evaluate')),
+  type text not null check (type in ('crawl', 'research', 'distill', 'evaluate')),
   status text not null check (status in ('queued', 'running', 'succeeded', 'failed')),
   person_id text references people(id) on delete set null,
   input text not null default '[]',

@@ -11,28 +11,64 @@ import { describe, expect, test } from "vitest";
 import { openDatabase } from "../db/connection.js";
 import { migrate } from "../db/migrate.js";
 
+function columnNames(rows: Array<{ name: string }>) {
+  return rows.map((row) => row.name);
+}
+
 describe("database schema", () => {
   test("creates the core Digital Mentor Matrix tables", () => {
     const dir = mkdtempSync(join(tmpdir(), "brainpower-db-"));
     const db = openDatabase(join(dir, "test.sqlite"));
 
-    migrate(db);
+    try {
+      migrate(db);
+      migrate(db);
 
-    const rows = db
-      .prepare("select name from sqlite_master where type = 'table' order by name")
-      .all() as Array<{ name: string }>;
+      const rows = db
+        .prepare("select name from sqlite_master where type = 'table' order by name")
+        .all() as Array<{ name: string }>;
 
-    expect(rows.map((row) => row.name)).toEqual([
-      "critiques",
-      "evaluations",
-      "fragments",
-      "jobs",
-      "people",
-      "skills",
-      "sources"
-    ]);
+      expect(columnNames(rows)).toEqual([
+        "critiques",
+        "evaluations",
+        "fragments",
+        "jobs",
+        "people",
+        "skills",
+        "sources"
+      ]);
 
-    db.close();
-    rmSync(dir, { recursive: true, force: true });
+      const sourceColumns = db.prepare("pragma table_info(sources)").all() as Array<{ name: string }>;
+      expect(columnNames(sourceColumns)).toEqual([
+        "id",
+        "person_id",
+        "url",
+        "title",
+        "source_type",
+        "trust_level",
+        "crawl_status",
+        "fetched_at",
+        "created_at"
+      ]);
+
+      const fragmentColumns = db.prepare("pragma table_info(fragments)").all() as Array<{ name: string }>;
+      expect(columnNames(fragmentColumns)).toEqual([
+        "id",
+        "source_id",
+        "person_id",
+        "content",
+        "summary",
+        "timeline_tag",
+        "evidence_type",
+        "created_at"
+      ]);
+
+      db.prepare(
+        "insert into jobs (id, type, status, input, output, created_at, updated_at) values (?, ?, ?, ?, ?, ?, ?)"
+      ).run("job-1", "crawl", "queued", "[]", "[]", "2026-06-01T00:00:00.000Z", "2026-06-01T00:00:00.000Z");
+    } finally {
+      db.close();
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });

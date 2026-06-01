@@ -21,22 +21,22 @@ export const SourceSchema = z.object({
   personId: z.string(),
   url: z.string().url(),
   title: z.string(),
-  publisher: z.string().optional(),
-  publishedAt: z.string().optional(),
-  capturedAt: z.string(),
-  credibility: z.number().min(0).max(1),
-  tags: z.array(z.string())
+  sourceType: z.string(),
+  trustLevel: z.string(),
+  crawlStatus: z.string(),
+  fetchedAt: z.string().nullable().optional(),
+  createdAt: z.string()
 });
 
 export const FragmentSchema = z.object({
   id: z.string(),
-  personId: z.string(),
   sourceId: z.string(),
-  quote: z.string(),
+  personId: z.string(),
+  content: z.string(),
   summary: z.string(),
-  topics: z.array(z.string()),
-  evidenceType: z.enum(["claim", "decision", "principle", "pattern"]),
-  confidence: z.number().min(0).max(1)
+  timelineTag: z.string(),
+  evidenceType: z.string(),
+  createdAt: z.string()
 });
 
 export const SkillSchema = z.object({
@@ -74,7 +74,7 @@ export const CritiqueSchema = z.object({
 
 export const JobSchema = z.object({
   id: z.string(),
-  type: z.enum(["research", "distill", "evaluate"]),
+  type: z.enum(["crawl", "research", "distill", "evaluate"]),
   status: z.enum(["queued", "running", "succeeded", "failed"]),
   personId: z.string().optional(),
   input: z.array(z.string()),
