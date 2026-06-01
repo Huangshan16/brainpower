@@ -106,11 +106,11 @@ create table if not exists conversations (
 create table if not exists conversation_participants (
   conversation_id text not null references conversations(id) on delete cascade,
   person_id text not null references people(id) on delete cascade,
-  skill_id text not null references skills(id) on delete cascade,
+  skill_id text references skills(id) on delete set null,
   join_source text not null,
   position integer not null check (position >= 0),
   is_active integer not null default 1 check (is_active in (0, 1)),
-  primary key (conversation_id, person_id, skill_id)
+  primary key (conversation_id, person_id)
 );
 
 create table if not exists messages (

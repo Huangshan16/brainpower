@@ -37,7 +37,7 @@ const personas = [
 
 test("records a full browser conversation workflow", async ({ page }, testInfo) => {
   const messages: Array<{ id: string; senderType: string; senderId: string; content: string }> = [];
-  let participants: Array<{ conversationId: string; personId: string; skillId: string; joinSource: string; position: number; isActive: boolean }> = [];
+  let participants: Array<{ conversationId: string; personId: string; skillId: string | null; joinSource: string; position: number; isActive: boolean }> = [];
   let nextMessageId = 1;
   let runStatus = "completed";
 
@@ -66,7 +66,7 @@ test("records a full browser conversation workflow", async ({ page }, testInfo) 
     }
 
     if (method === "POST" && path === "/api/conversations/conv-1/participants") {
-      const payload = JSON.parse(request.postData() ?? "{}") as { personId: string; skillId: string; joinSource: string };
+      const payload = JSON.parse(request.postData() ?? "{}") as { personId: string; skillId?: string | null; joinSource: string };
       participants = [
         ...participants,
         {

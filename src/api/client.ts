@@ -16,14 +16,14 @@ export type ApiClient = {
   createConversation(input: { title: string; mode: "direct" | "group" }): Promise<{ id: string; title: string; mode: "direct" | "group" }>;
   listConversationParticipants(input: {
     conversationId: string;
-  }): Promise<{ participants: Array<{ conversationId: string; personId: string; skillId: string; joinSource: string; position: number; isActive: boolean }> }>;
+  }): Promise<{ participants: Array<{ conversationId: string; personId: string; skillId: string | null; joinSource: string; position: number; isActive: boolean }> }>;
   addConversationParticipant(input: {
     conversationId: string;
     personId: string;
-    skillId: string;
+    skillId?: string | null;
     joinSource: string;
   }): Promise<unknown>;
-  removeConversationParticipant(input: { conversationId: string; personId: string; skillId: string }): Promise<void>;
+  removeConversationParticipant(input: { conversationId: string; personId: string }): Promise<void>;
   sendConversationMessage(input: {
     conversationId: string;
     content: string;
@@ -120,7 +120,7 @@ export function createApiClient(): ApiClient {
       });
     },
     removeConversationParticipant(input) {
-      return deleteRequest(`/api/conversations/${input.conversationId}/participants/${input.personId}/${input.skillId}`);
+      return deleteRequest(`/api/conversations/${input.conversationId}/participants/${input.personId}`);
     },
     sendConversationMessage(input) {
       return postJson(`/api/conversations/${input.conversationId}/messages`, {

@@ -363,7 +363,7 @@ describe("app routes", () => {
         const participant = await fetch(`http://127.0.0.1:${port}/api/conversations/${conversation.id}/participants`, {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ personId: "person-paul", skillId: "skill-paul-v1", joinSource: "library" })
+          body: JSON.stringify({ personId: "person-paul", joinSource: "library" })
         });
         const message = await fetch(`http://127.0.0.1:${port}/api/conversations/${conversation.id}/messages`, {
           method: "POST",

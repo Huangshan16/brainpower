@@ -48,7 +48,7 @@ export const ConversationRunSchema = z.object({
 export const ConversationParticipantSchema = z.object({
   conversationId: z.string(),
   personId: z.string(),
-  skillId: z.string(),
+  skillId: z.string().nullable(),
   joinSource: z.string(),
   position: z.number().int().nonnegative(),
   isActive: z.boolean()

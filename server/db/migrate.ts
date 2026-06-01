@@ -53,8 +53,11 @@ export function migrate(db: Database.Database) {
     participantSql.includes("references skills(id)");
   const hasParticipantChecks =
     participantSql.includes("check (position >= 0)") && participantSql.includes("check (is_active in (0, 1))");
+  const hasNullableSkill =
+    participantSql.includes("skill_id text references skills(id) on delete set null") &&
+    participantSql.includes("primary key (conversation_id, person_id)");
 
-  if (!hasParticipantForeignKeys || !hasParticipantChecks) {
+  if (!hasParticipantForeignKeys || !hasParticipantChecks || !hasNullableSkill) {
     rebuildConversationParticipants(db);
   }
 
@@ -178,11 +181,11 @@ function rebuildConversationParticipants(db: Database.Database) {
       create table conversation_participants (
         conversation_id text not null references conversations(id) on delete cascade,
         person_id text not null references people(id) on delete cascade,
-        skill_id text not null references skills(id) on delete cascade,
+        skill_id text references skills(id) on delete set null,
         join_source text not null,
         position integer not null check (position >= 0),
         is_active integer not null default 1 check (is_active in (0, 1)),
-        primary key (conversation_id, person_id, skill_id)
+        primary key (conversation_id, person_id)
       );
     `);
     db.exec(`
@@ -190,18 +193,18 @@ function rebuildConversationParticipants(db: Database.Database) {
         select
           legacy.conversation_id,
           legacy.person_id,
-          legacy.skill_id,
+          skills.id as skill_id,
           legacy.join_source,
           legacy.position,
           legacy.is_active,
           row_number() over (
-            partition by legacy.conversation_id, legacy.person_id, legacy.skill_id
-            order by legacy.rowid
+            partition by legacy.conversation_id, legacy.person_id
+            order by case when skills.id is null then 1 else 0 end, legacy.rowid desc
           ) as row_number
         from conversation_participants_legacy legacy
         join conversations on conversations.id = legacy.conversation_id
         join people on people.id = legacy.person_id
-        join skills on skills.id = legacy.skill_id
+        left join skills on skills.id = legacy.skill_id
         where legacy.position >= 0
           and legacy.is_active in (0, 1)
       )

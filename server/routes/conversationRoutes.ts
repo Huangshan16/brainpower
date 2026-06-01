@@ -19,7 +19,7 @@ const CreateConversationInputSchema = z.object({
 
 const AddParticipantInputSchema = z.object({
   personId: z.string().min(1),
-  skillId: z.string().min(1),
+  skillId: z.string().min(1).nullable().optional(),
   joinSource: z.string().min(1),
   position: z.number().int().nonnegative().optional()
 });
@@ -99,9 +99,9 @@ export function createConversationRoutes(conversations: ConversationService, run
     }
   });
 
-  router.delete("/conversations/:conversationId/participants/:personId/:skillId", (req, res) => {
+  router.delete("/conversations/:conversationId/participants/:personId", (req, res) => {
     try {
-      conversations.removeParticipant(req.params.conversationId, req.params.personId, req.params.skillId);
+      conversations.removeParticipant(req.params.conversationId, req.params.personId);
       res.status(204).send();
     } catch {
       res.status(404).json({ error: "Conversation participant not found" });

@@ -8,8 +8,8 @@ export function ParticipantTray({
   participants,
   onRemove
 }: {
-  participants: Array<{ id: string; name: string; skillId: string }>;
-  onRemove: (participant: { id: string; name: string; skillId: string }) => void;
+  participants: Array<{ id: string; name: string; skillId: string | null }>;
+  onRemove: (participant: { id: string; name: string; skillId: string | null }) => void;
 }) {
   const participantLabel = participants.length === 0 ? "暂无" : `${participants.length} 位`;
 
@@ -24,7 +24,7 @@ export function ParticipantTray({
           <p className="workspace-note">先加入 1 位人物才能单聊，至少 2 位人物才能拉起真正的群聊。</p>
         ) : (
           participants.map((participant) => (
-            <div className="participant-chip" key={`${participant.id}-${participant.skillId}`}>
+            <div className="participant-chip" key={participant.id}>
               <span>{participant.name}</span>
               <button aria-label={`移除 ${participant.name}`} onClick={() => onRemove(participant)} type="button">
                 移除

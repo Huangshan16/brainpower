@@ -128,7 +128,7 @@ describe("database schema", () => {
       );
       db.prepare(
         "insert into conversation_participants (conversation_id, person_id, skill_id, join_source, position, is_active) values (?, ?, ?, ?, ?, ?)"
-      ).run("conv-1", "person-1", "skill-1", "manual", 0, 1);
+      ).run("conv-1", "person-1", null, "manual", 0, 1);
 
       const peopleColumns = db.prepare("pragma table_info(people)").all() as Array<{ name: string }>;
       const conversationColumns = db.prepare("pragma table_info(conversations)").all() as Array<{ name: string }>;
@@ -175,14 +175,14 @@ describe("database schema", () => {
           .prepare(
             "insert into conversation_participants (conversation_id, person_id, skill_id, join_source, position, is_active) values (?, ?, ?, ?, ?, ?)"
           )
-          .run("conv-1", "missing-person", "skill-1", "manual", 0, 1)
+          .run("conv-1", "missing-person", null, "manual", 0, 1)
       ).toThrow();
       expect(() =>
         db
           .prepare(
             "insert into conversation_participants (conversation_id, person_id, skill_id, join_source, position, is_active) values (?, ?, ?, ?, ?, ?)"
           )
-          .run("conv-1", "person-1", "skill-1", "manual", -1, 1)
+          .run("conv-1", "person-1", null, "manual", -1, 1)
       ).toThrow();
       expect(() =>
         db
@@ -208,9 +208,9 @@ describe("database schema", () => {
       expect(() =>
         db
           .prepare(
-            "update conversation_participants set is_active = ? where conversation_id = ? and person_id = ? and skill_id = ?"
+            "update conversation_participants set is_active = ? where conversation_id = ? and person_id = ?"
           )
-          .run(2, "conv-1", "person-1", "skill-1")
+          .run(2, "conv-1", "person-1")
       ).toThrow();
     } finally {
       db.close();

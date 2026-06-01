@@ -16,7 +16,7 @@ const libraryPeople = [
 
 describe("ConversationWorkspace", () => {
   test("adds a persona to the conversation and sends a direct message", async () => {
-    let participants = [{ conversationId: "conv-1", personId: "paul", skillId: "paul-v1", joinSource: "library", position: 0, isActive: true }];
+    let participants = [{ conversationId: "conv-1", personId: "paul", skillId: null, joinSource: "library", position: 0, isActive: true }];
     const api = {
       listPersonas: async () => ({ people: [] }),
       importNuwaPersonas: async () => ({ imported: [] }),
@@ -53,7 +53,7 @@ describe("ConversationWorkspace", () => {
   });
 
   test("starts and stops group chat", async () => {
-    let participants: Array<{ conversationId: string; personId: string; skillId: string; joinSource: string; position: number; isActive: boolean }> = [];
+    let participants: Array<{ conversationId: string; personId: string; skillId: string | null; joinSource: string; position: number; isActive: boolean }> = [];
     let runStatus = "running";
     const api = {
       listPersonas: async () => ({ people: [] }),
@@ -64,8 +64,18 @@ describe("ConversationWorkspace", () => {
       evaluateProject: async () => ({}),
       createConversation: async () => ({ id: "conv-2", title: "数字高人对话", mode: "group" as const }),
       listConversationParticipants: async () => ({ participants }),
-      addConversationParticipant: async (input: { personId: string; skillId: string; joinSource: string }) => {
-        participants = [...participants, { conversationId: "conv-2", personId: input.personId, skillId: input.skillId, joinSource: input.joinSource, position: participants.length, isActive: true }];
+      addConversationParticipant: async (input: { personId: string; skillId?: string | null; joinSource: string }) => {
+        participants = [
+          ...participants,
+          {
+            conversationId: "conv-2",
+            personId: input.personId,
+            skillId: input.skillId ?? null,
+            joinSource: input.joinSource,
+            position: participants.length,
+            isActive: true
+          }
+        ];
       },
       removeConversationParticipant: async () => undefined,
       sendConversationMessage: async () => ({ id: "msg-2", content: "来一轮群聊" }),

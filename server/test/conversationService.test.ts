@@ -33,7 +33,40 @@ function seedPersonWithSkill() {
 }
 
 describe("conversationService", () => {
-  test("adds and removes participants from a conversation using skill snapshots", () => {
+  test("allows adding a participant before any skill has been distilled", () => {
+    const dir = mkdtempSync(join(tmpdir(), "brainpower-conversation-service-"));
+    const db = openDatabase(join(dir, "test.sqlite"));
+
+    try {
+      migrate(db);
+      migrate(db);
+
+      const library = createLibraryService(db);
+      const person = library.createPerson({ name: "张一鸣", role: "entrepreneur", region: "CN", tags: ["product"] });
+      const service = createConversationService(db);
+      const conversation = service.createConversation({ title: "产品判断", mode: "group" });
+
+      const participant = service.addParticipant({
+        conversationId: conversation.id,
+        personId: person.id,
+        joinSource: "library"
+      });
+
+      expect(participant).toMatchObject({
+        conversationId: conversation.id,
+        personId: person.id,
+        skillId: null,
+        joinSource: "library",
+        position: 0,
+        isActive: true
+      });
+    } finally {
+      db.close();
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("adds and removes participants from a conversation using optional skill snapshots", () => {
     const { dir, db, person } = seedPersonWithSkill();
 
     try {
@@ -43,7 +76,6 @@ describe("conversationService", () => {
       const participant = service.addParticipant({
         conversationId: conversation.id,
         personId: person.id,
-        skillId: "skill-paul-v1",
         joinSource: "library"
       });
 
@@ -57,7 +89,7 @@ describe("conversationService", () => {
       });
       expect(service.listParticipants(conversation.id)).toHaveLength(1);
 
-      service.removeParticipant(conversation.id, person.id, "skill-paul-v1");
+      service.removeParticipant(conversation.id, person.id);
 
       expect(service.listParticipants(conversation.id)).toEqual([]);
       expect(service.listConversations()).toHaveLength(1);

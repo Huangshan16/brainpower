@@ -27,7 +27,7 @@ type ConversationRow = {
 type ParticipantRow = {
   conversation_id: string;
   person_id: string;
-  skill_id: string;
+  skill_id: string | null;
   join_source: string;
   position: number;
   is_active: number;
@@ -48,7 +48,7 @@ type MessageRow = {
 type AddParticipantInput = {
   conversationId: string;
   personId: string;
-  skillId: string;
+  skillId?: string | null;
   joinSource: string;
   position?: number;
 };
@@ -123,6 +123,14 @@ function getNextParticipantPosition(db: Database.Database, conversationId: strin
   return row.position + 1;
 }
 
+function findLatestSkillId(db: Database.Database, personId: string) {
+  const row = db
+    .prepare("select id from skills where person_id = ? order by version desc, created_at desc, id desc limit 1")
+    .get(personId) as { id: string } | undefined;
+
+  return row?.id ?? null;
+}
+
 function getNextRoundIndex(
   db: Database.Database,
   conversationId: string,
@@ -176,14 +184,21 @@ export function createConversationService(db: Database.Database) {
         throw new Error("Conversation not found");
       }
 
+      const skillId = input.skillId === undefined ? findLatestSkillId(db, input.personId) : input.skillId;
+
       db.prepare(
         `insert into conversation_participants (
           conversation_id, person_id, skill_id, join_source, position, is_active
-        ) values (?, ?, ?, ?, ?, ?)`
+        ) values (?, ?, ?, ?, ?, ?)
+        on conflict(conversation_id, person_id) do update set
+          skill_id = excluded.skill_id,
+          join_source = excluded.join_source,
+          position = excluded.position,
+          is_active = excluded.is_active`
       ).run(
         input.conversationId,
         input.personId,
-        input.skillId,
+        skillId,
         input.joinSource,
         input.position ?? getNextParticipantPosition(db, input.conversationId),
         1
@@ -191,9 +206,9 @@ export function createConversationService(db: Database.Database) {
 
       const row = db
         .prepare(
-          "select * from conversation_participants where conversation_id = ? and person_id = ? and skill_id = ?"
+          "select * from conversation_participants where conversation_id = ? and person_id = ?"
         )
-        .get(input.conversationId, input.personId, input.skillId) as ParticipantRow | undefined;
+        .get(input.conversationId, input.personId) as ParticipantRow | undefined;
 
       if (!row) {
         throw new Error("Conversation participant insert failed");
@@ -202,10 +217,10 @@ export function createConversationService(db: Database.Database) {
       return mapParticipant(row);
     },
 
-    removeParticipant(conversationId: string, personId: string, skillId: string) {
+    removeParticipant(conversationId: string, personId: string) {
       const result = db
-        .prepare("delete from conversation_participants where conversation_id = ? and person_id = ? and skill_id = ?")
-        .run(conversationId, personId, skillId);
+        .prepare("delete from conversation_participants where conversation_id = ? and person_id = ?")
+        .run(conversationId, personId);
 
       if (result.changes === 0) {
         throw new Error("Conversation participant not found");

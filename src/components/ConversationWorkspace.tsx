@@ -49,7 +49,7 @@ export function ConversationWorkspace({
   selectedPersonId: string;
 }) {
   const [conversationId, setConversationId] = useState<string | null>(null);
-  const [participants, setParticipants] = useState<Array<{ id: string; name: string; skillId: string }>>([]);
+  const [participants, setParticipants] = useState<Array<{ id: string; name: string; skillId: string | null }>>([]);
   const [messages, setMessages] = useState<UiMessage[]>([]);
   const [draft, setDraft] = useState("你会如何判断这个项目？");
   const [runState, setRunState] = useState<RunState>("idle");
@@ -90,7 +90,7 @@ export function ConversationWorkspace({
 
   async function syncParticipants(nextConversationId: string) {
     if (!api) {
-      return;
+      return [];
     }
 
     const payload = await api.listConversationParticipants({ conversationId: nextConversationId });
@@ -101,6 +101,7 @@ export function ConversationWorkspace({
     }));
 
     setParticipants(mapped);
+    return mapped;
   }
 
   async function syncMessages(nextConversationId: string) {
@@ -169,15 +170,14 @@ export function ConversationWorkspace({
     }
 
     const nextConversationId = await ensureConversation();
-    await api?.addConversationParticipant({
-      conversationId: nextConversationId,
-      personId: person.id,
-      skillId: `${person.id}-v1`,
-      joinSource: "library"
-    });
-    await syncParticipants(nextConversationId);
-
-    return { id: person.id, name: person.name, skillId: `${person.id}-v1` };
+      await api?.addConversationParticipant({
+        conversationId: nextConversationId,
+        personId: person.id,
+        joinSource: "library"
+      });
+    const nextParticipants = await syncParticipants(nextConversationId);
+    const inserted = nextParticipants.find((participant) => participant.id === person.id);
+    return inserted ?? { id: person.id, name: person.name, skillId: null };
   }
 
   async function handleAddParticipant() {
@@ -199,7 +199,6 @@ export function ConversationWorkspace({
       await api.addConversationParticipant({
         conversationId: nextConversationId,
         personId: person.id,
-        skillId: `${person.id}-v1`,
         joinSource: "library"
       });
       await syncParticipants(nextConversationId);
@@ -213,7 +212,7 @@ export function ConversationWorkspace({
     setJobNote(`${person.name} 已加入会话。`);
   }
 
-  async function handleRemoveParticipant(participant: { id: string; name: string; skillId: string }) {
+  async function handleRemoveParticipant(participant: { id: string; name: string; skillId: string | null }) {
     if (!api || !conversationId) {
       return;
     }
@@ -223,8 +222,7 @@ export function ConversationWorkspace({
     try {
       await api.removeConversationParticipant({
         conversationId,
-        personId: participant.id,
-        skillId: participant.skillId
+        personId: participant.id
       });
       await syncParticipants(conversationId);
       setJobNote(`${participant.name} 已移出会话。`);
