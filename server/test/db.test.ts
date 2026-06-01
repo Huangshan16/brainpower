@@ -308,4 +308,151 @@ describe("database schema", () => {
       rmSync(dir, { recursive: true, force: true });
     }
   });
+
+  test("rebuilds legacy conversation_participants and keeps only valid rows", () => {
+    const dir = mkdtempSync(join(tmpdir(), "brainpower-db-"));
+    const db = openDatabase(join(dir, "test.sqlite"));
+
+    try {
+      db.exec(`
+        create table people (
+          id text primary key,
+          name text not null,
+          role text not null,
+          region text not null,
+          tags text not null default '[]',
+          status text not null,
+          notes text,
+          created_at text not null,
+          updated_at text not null
+        );
+        create table skills (
+          id text primary key,
+          person_id text not null,
+          version integer not null,
+          mental_models_json text not null default '[]',
+          heuristics_json text not null default '[]',
+          voice_dna_json text not null default '[]',
+          anti_patterns_json text not null default '[]',
+          honesty_boundaries_json text not null default '[]',
+          citations_json text not null default '[]',
+          created_at text not null
+        );
+        create table conversations (
+          id text primary key,
+          title text not null,
+          mode text not null,
+          status text not null,
+          created_at text not null,
+          updated_at text not null
+        );
+        create table conversation_participants (
+          conversation_id text not null,
+          person_id text not null,
+          skill_id text not null,
+          join_source text not null,
+          position integer not null,
+          is_active integer not null default 1
+        );
+      `);
+
+      db.prepare(
+        "insert into people (id, name, role, region, tags, status, notes, created_at, updated_at) values (?, ?, ?, ?, ?, ?, ?, ?, ?)"
+      ).run("person-1", "Linus", "investor", "US", "[]", "needs_research", null, "2026-06-01T00:00:00.000Z", "2026-06-01T00:00:00.000Z");
+      db.prepare(
+        "insert into skills (id, person_id, version, mental_models_json, heuristics_json, voice_dna_json, anti_patterns_json, honesty_boundaries_json, citations_json, created_at) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+      ).run(
+        "skill-1",
+        "person-1",
+        1,
+        "[]",
+        "[]",
+        "[]",
+        "[]",
+        "[]",
+        "[]",
+        "2026-06-01T00:00:00.000Z"
+      );
+      db.prepare(
+        "insert into conversations (id, title, mode, status, created_at, updated_at) values (?, ?, ?, ?, ?, ?)"
+      ).run("conv-1", "Legacy Conversation", "group", "active", "2026-06-01T00:00:00.000Z", "2026-06-01T00:00:00.000Z");
+
+      db.prepare(
+        "insert into conversation_participants (conversation_id, person_id, skill_id, join_source, position, is_active) values (?, ?, ?, ?, ?, ?)"
+      ).run("conv-1", "person-1", "skill-1", "manual", 0, 1);
+      db.prepare(
+        "insert into conversation_participants (conversation_id, person_id, skill_id, join_source, position, is_active) values (?, ?, ?, ?, ?, ?)"
+      ).run("conv-1", "person-1", "skill-1", "manual", 0, 1);
+      db.prepare(
+        "insert into conversation_participants (conversation_id, person_id, skill_id, join_source, position, is_active) values (?, ?, ?, ?, ?, ?)"
+      ).run("missing-conv", "person-1", "skill-1", "manual", -1, 2);
+
+      migrate(db);
+
+      const participantColumns = db.prepare("pragma table_info(conversation_participants)").all() as Array<{ name: string }>;
+      const foreignKeys = db.prepare("pragma foreign_key_list(conversation_participants)").all() as Array<{
+        from: string;
+        table: string;
+        to: string;
+      }>;
+      const rows = db
+        .prepare(
+          "select conversation_id, person_id, skill_id, join_source, position, is_active from conversation_participants order by conversation_id, person_id, skill_id"
+        )
+        .all() as Array<{
+        conversation_id: string;
+        person_id: string;
+        skill_id: string;
+        join_source: string;
+        position: number;
+        is_active: number;
+      }>;
+
+      expect(columnNames(participantColumns)).toEqual(
+        expect.arrayContaining([
+          "conversation_id",
+          "person_id",
+          "skill_id",
+          "join_source",
+          "position",
+          "is_active"
+        ])
+      );
+      expect(foreignKeys).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ from: "conversation_id", table: "conversations", to: "id" }),
+          expect.objectContaining({ from: "person_id", table: "people", to: "id" }),
+          expect.objectContaining({ from: "skill_id", table: "skills", to: "id" })
+        ])
+      );
+      expect(rows).toEqual([
+        {
+          conversation_id: "conv-1",
+          person_id: "person-1",
+          skill_id: "skill-1",
+          join_source: "manual",
+          position: 0,
+          is_active: 1
+        }
+      ]);
+
+      expect(() =>
+        db
+          .prepare(
+            "insert into conversation_participants (conversation_id, person_id, skill_id, join_source, position, is_active) values (?, ?, ?, ?, ?, ?)"
+          )
+          .run("conv-1", "person-1", "skill-1", "manual", -1, 1)
+      ).toThrow();
+      expect(() =>
+        db
+          .prepare(
+            "insert into conversation_participants (conversation_id, person_id, skill_id, join_source, position, is_active) values (?, ?, ?, ?, ?, ?)"
+          )
+          .run("conv-1", "missing-person", "skill-1", "manual", 0, 1)
+      ).toThrow();
+    } finally {
+      db.close();
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
 });
