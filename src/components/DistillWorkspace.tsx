@@ -33,7 +33,7 @@ export function DistillWorkspace({
   return (
     <section className="workspace-card">
       <div className="workspace-header">
-        <p className="eyebrow">DISTILL</p>
+        <p className="eyebrow">蒸馏</p>
         <h3>技能蒸馏工作台</h3>
       </div>
       <dl className="metric-grid">

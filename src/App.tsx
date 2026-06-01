@@ -6,8 +6,8 @@
  */
 import { useState } from "react";
 import { type ApiClient, createApiClient } from "./api/client";
+import { ConversationWorkspace } from "./components/ConversationWorkspace";
 import { DistillWorkspace } from "./components/DistillWorkspace";
-import { EvaluateWorkspace } from "./components/EvaluateWorkspace";
 import { EvidencePanel } from "./components/EvidencePanel";
 import { PeoplePanel } from "./components/PeoplePanel";
 import { ResearchWorkspace } from "./components/ResearchWorkspace";
@@ -44,8 +44,8 @@ function renderWorkspace(
     return <DistillWorkspace api={options.api} evidenceCount={options.evidenceCount} personId={options.personId} personName={options.personName} />;
   }
 
-  if (workflow === "Evaluate") {
-    return <EvaluateWorkspace api={options.api} personId={options.personId} />;
+  if (workflow === "Conversation") {
+    return <ConversationWorkspace api={options.api} libraryPeople={seedPeople.map(({ id, name }) => ({ id, name }))} selectedPersonId={options.personId} />;
   }
 
   return (
@@ -68,7 +68,7 @@ export function App({ api = createApiClient() }: { api?: ApiClient }) {
     <div className="app-shell">
       <header className="app-header">
         <div>
-          <p className="eyebrow">AI JUDGMENT CONSOLE</p>
+          <p className="eyebrow">认知判断控制台</p>
           <h1>数字高人矩阵</h1>
         </div>
         <WorkflowTabs activeWorkflow={activeWorkflow} onChange={setActiveWorkflow} />
@@ -76,7 +76,7 @@ export function App({ api = createApiClient() }: { api?: ApiClient }) {
 
       <main className="app-grid">
         <PeoplePanel onSelect={setSelectedPersonId} people={[...seedPeople]} selectedPersonId={selectedPersonId} />
-        <section className="panel panel-workspace" aria-label="Workflow workspace">
+        <section className="panel panel-workspace" aria-label="工作区">
           {renderWorkspace(activeWorkflow, {
             personId: selectedPerson.id,
             personName: selectedPerson.name,

@@ -8,6 +8,25 @@ export type ApiClient = {
   crawlSeedUrl(input: { personId: string; url: string }): Promise<{ fragments: unknown[] }>;
   distillSkill(input: { personId: string }): Promise<unknown>;
   evaluateProject(input: { project: { title: string; brief: string }; personId: string; skillId: string }): Promise<unknown>;
+  createConversation(input: { title: string; mode: "direct" | "group" }): Promise<{ id: string; title: string; mode: "direct" | "group" }>;
+  addConversationParticipant(input: {
+    conversationId: string;
+    personId: string;
+    skillId: string;
+    joinSource: string;
+  }): Promise<unknown>;
+  removeConversationParticipant(input: { conversationId: string; personId: string; skillId: string }): Promise<void>;
+  sendConversationMessage(input: {
+    conversationId: string;
+    content: string;
+    senderType?: "user" | "persona" | "system";
+    senderId?: string;
+    replyToMessageId?: string | null;
+  }): Promise<{ id: string; content: string }>;
+  listConversationMessages(input: { conversationId: string }): Promise<{ messages: Array<Record<string, unknown>> }>;
+  startDirectRun(input: { conversationId: string; messageId: string; speakerPersonId: string }): Promise<Record<string, unknown>>;
+  startGroupRun(input: { conversationId: string; messageId: string }): Promise<Record<string, unknown>>;
+  stopGroupRun(input: { conversationId: string; runId: string }): Promise<void>;
 };
 
 async function postJson(path: string, body: unknown) {
@@ -33,7 +52,29 @@ async function postJson(path: string, body: unknown) {
     throw new Error(message);
   }
 
+  if (response.status === 204) {
+    return undefined;
+  }
+
   return response.json();
+}
+
+async function getJson(path: string) {
+  const response = await fetch(path);
+
+  if (!response.ok) {
+    throw new Error(`Request failed: ${response.status}`);
+  }
+
+  return response.json();
+}
+
+async function deleteRequest(path: string) {
+  const response = await fetch(path, { method: "DELETE" });
+
+  if (!response.ok) {
+    throw new Error(`Request failed: ${response.status}`);
+  }
 }
 
 export function createApiClient(): ApiClient {
@@ -46,6 +87,44 @@ export function createApiClient(): ApiClient {
     },
     evaluateProject(input) {
       return postJson("/api/evaluations", input);
+    },
+    createConversation(input) {
+      return postJson("/api/conversations", input);
+    },
+    addConversationParticipant(input) {
+      return postJson(`/api/conversations/${input.conversationId}/participants`, {
+        personId: input.personId,
+        skillId: input.skillId,
+        joinSource: input.joinSource
+      });
+    },
+    removeConversationParticipant(input) {
+      return deleteRequest(`/api/conversations/${input.conversationId}/participants/${input.personId}/${input.skillId}`);
+    },
+    sendConversationMessage(input) {
+      return postJson(`/api/conversations/${input.conversationId}/messages`, {
+        content: input.content,
+        senderType: input.senderType,
+        senderId: input.senderId,
+        replyToMessageId: input.replyToMessageId
+      });
+    },
+    listConversationMessages(input) {
+      return getJson(`/api/conversations/${input.conversationId}/messages`);
+    },
+    startDirectRun(input) {
+      return postJson(`/api/conversations/${input.conversationId}/run/direct`, {
+        messageId: input.messageId,
+        speakerPersonId: input.speakerPersonId
+      });
+    },
+    startGroupRun(input) {
+      return postJson(`/api/conversations/${input.conversationId}/run/group`, {
+        messageId: input.messageId
+      });
+    },
+    async stopGroupRun(input) {
+      await postJson(`/api/conversations/${input.conversationId}/run/stop`, { runId: input.runId });
     }
   };
 }

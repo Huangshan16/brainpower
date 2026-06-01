@@ -29,9 +29,9 @@ export function PeoplePanel({
   onSelect: (personId: string) => void;
 }) {
   return (
-    <aside className="panel panel-people" aria-label="People matrix">
+    <aside className="panel panel-people" aria-label="人物矩阵">
       <div className="panel-header">
-        <p className="eyebrow">MATRIX</p>
+        <p className="eyebrow">人物库</p>
         <h2>人物矩阵</h2>
       </div>
       <div className="person-list">

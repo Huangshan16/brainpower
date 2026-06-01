@@ -38,7 +38,7 @@ export function ResearchWorkspace({
   return (
     <section className="workspace-card">
       <div className="workspace-header">
-        <p className="eyebrow">RESEARCH</p>
+        <p className="eyebrow">研究</p>
         <h3>{personName}的证据采集</h3>
       </div>
       <label>

@@ -14,15 +14,15 @@ describe("App", () => {
     render(<App />);
 
     expect(screen.getByRole("heading", { name: /数字高人矩阵/i })).toBeInTheDocument();
-    expect(screen.getByLabelText("People matrix")).toBeInTheDocument();
-    expect(screen.getByLabelText("Workflow workspace")).toBeInTheDocument();
-    expect(screen.getByLabelText("Evidence and output")).toBeInTheDocument();
+    expect(screen.getByLabelText("人物矩阵")).toBeInTheDocument();
+    expect(screen.getByLabelText("工作区")).toBeInTheDocument();
+    expect(screen.getByLabelText("证据与输出")).toBeInTheDocument();
 
     await userEvent.click(screen.getByRole("button", { name: "蒸馏" }));
     expect(screen.getByText(/技能蒸馏工作台/i)).toBeInTheDocument();
 
-    await userEvent.click(screen.getByRole("button", { name: "评审" }));
-    expect(screen.getByText(/项目简介/i)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "对话" }));
+    expect(screen.getByRole("heading", { name: "对话工作台", level: 3 })).toBeInTheDocument();
   });
 
   test("submits a crawl request through the API client seam", async () => {
@@ -36,7 +36,15 @@ describe("App", () => {
             return { fragments: [] };
           },
           distillSkill: async () => ({}),
-          evaluateProject: async () => ({})
+          evaluateProject: async () => ({}),
+          createConversation: async () => ({ id: "conv-x", title: "数字高人对话", mode: "group" as const }),
+          addConversationParticipant: async () => ({}),
+          removeConversationParticipant: async () => undefined,
+          sendConversationMessage: async () => ({ id: "msg-x", content: "test" }),
+          listConversationMessages: async () => ({ messages: [] }),
+          startDirectRun: async () => ({ id: "run-x" }),
+          startGroupRun: async () => ({ id: "run-y" }),
+          stopGroupRun: async () => undefined
         }}
       />
     );
@@ -47,32 +55,32 @@ describe("App", () => {
     expect(calls[0].url).toBe("https://example.com/interview");
   });
 
-  test("shows progress and failure feedback when evaluation request fails", async () => {
-    let release = () => {};
-
+  test("switches into conversation mode and exposes the conversation controls", async () => {
     const view = render(
       <App
         api={{
           crawlSeedUrl: async () => ({ fragments: [] }),
           distillSkill: async () => ({}),
-          evaluateProject: () =>
-            new Promise((_, reject) => {
-              release = () => reject(new Error("Model request failed with status 500"));
-            })
+          evaluateProject: async () => ({}),
+          createConversation: async () => ({ id: "conv-1", title: "数字高人对话", mode: "group" as const }),
+          addConversationParticipant: async () => ({}),
+          removeConversationParticipant: async () => undefined,
+          sendConversationMessage: async () => ({ id: "msg-1", content: "test" }),
+          listConversationMessages: async () => ({ messages: [] }),
+          startDirectRun: async () => ({ id: "run-1" }),
+          startGroupRun: async () => ({ id: "run-2" }),
+          stopGroupRun: async () => undefined
         }}
       />
     );
 
-    const workflowTabs = within(view.container).getByRole("tablist", { name: "Workflow tabs" });
+    const workflowTabs = within(view.container).getByRole("tablist", { name: "工作流切换" });
 
-    await userEvent.click(within(workflowTabs).getByRole("button", { name: /^评审$/ }));
-    await userEvent.click(within(view.container).getByRole("button", { name: "运行评审矩阵" }));
+    await userEvent.click(within(workflowTabs).getByRole("button", { name: /^对话$/ }));
 
-    expect(within(view.container).getByText(/正在运行评审矩阵/i)).toBeInTheDocument();
-
-    release();
-
-    expect(await within(view.container).findByText(/Model request failed with status 500/i)).toBeInTheDocument();
+    expect(within(view.container).getByRole("button", { name: "发送" })).toBeInTheDocument();
+    expect(within(view.container).getByRole("button", { name: "单聊" })).toBeInTheDocument();
+    expect(within(view.container).getByRole("button", { name: "群聊" })).toBeInTheDocument();
   });
 
   test("switches the evidence panel person from the dropdown", async () => {

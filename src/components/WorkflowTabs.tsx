@@ -1,16 +1,16 @@
 /**
- * [INPUT]: 依赖 workflow 状态与切换回调渲染研究、蒸馏、评审分段控件
+ * [INPUT]: 依赖 workflow 状态与切换回调渲染研究、蒸馏、对话分段控件
  * [OUTPUT]: 对外提供 WorkflowTabs 组件与 Workflow 类型
  * [POS]: src/components 的主工作流切换器，被 App 与工作区共享
  * [PROTOCOL]: 变更时更新此头部，然后检查 AGENTS.md
  */
-export type Workflow = "Research" | "Distill" | "Evaluate";
+export type Workflow = "Research" | "Distill" | "Conversation";
 
-const workflows: Workflow[] = ["Research", "Distill", "Evaluate"];
+const workflows: Workflow[] = ["Research", "Distill", "Conversation"];
 const workflowLabelMap: Record<Workflow, string> = {
   Research: "研究",
   Distill: "蒸馏",
-  Evaluate: "评审"
+  Conversation: "对话"
 };
 
 export function WorkflowTabs({
@@ -21,7 +21,7 @@ export function WorkflowTabs({
   onChange: (workflow: Workflow) => void;
 }) {
   return (
-    <div className="workflow-tabs" role="tablist" aria-label="Workflow tabs">
+    <div className="workflow-tabs" role="tablist" aria-label="工作流切换">
       {workflows.map((workflow) => (
         <button
           key={workflow}
