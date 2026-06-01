@@ -1,6 +1,6 @@
 /**
  * [INPUT]: 依赖 zod 的运行时 schema 与类型推导能力
- * [OUTPUT]: 对外提供 PersonaSchema/PersonSchema、ConversationSchema、MessageSchema、SourceSchema、FragmentSchema、SkillSchema、EvaluationSchema、CritiqueSchema、JobSchema 与类型
+ * [OUTPUT]: 对外提供 PersonaSchema/PersonSchema、ConversationSchema、ConversationRunSchema、MessageSchema、SourceSchema、FragmentSchema、SkillSchema、EvaluationSchema、CritiqueSchema、JobSchema 与类型
  * [POS]: shared 的契约中心，被前端 API client 与后端服务共同消费
  * [PROTOCOL]: 变更时更新此头部，然后检查 AGENTS.md
  */
@@ -28,6 +28,18 @@ export const ConversationSchema = z.object({
   title: z.string(),
   mode: z.enum(["direct", "group"]),
   status: z.enum(["active", "stopped", "archived"]),
+  createdAt: z.string(),
+  updatedAt: z.string()
+});
+
+export const ConversationRunSchema = z.object({
+  id: z.string(),
+  conversationId: z.string(),
+  mode: z.enum(["direct", "group"]),
+  status: z.enum(["running", "stopped", "completed", "failed"]),
+  messageId: z.string(),
+  speakerPersonId: z.string().nullable(),
+  stopReason: z.string().nullable(),
   createdAt: z.string(),
   updatedAt: z.string()
 });
@@ -129,6 +141,7 @@ export const JobSchema = z.object({
 export type Person = z.infer<typeof PersonSchema>;
 export type Persona = z.infer<typeof PersonaSchema>;
 export type Conversation = z.infer<typeof ConversationSchema>;
+export type ConversationRun = z.infer<typeof ConversationRunSchema>;
 export type ConversationParticipant = z.infer<typeof ConversationParticipantSchema>;
 export type Message = z.infer<typeof MessageSchema>;
 export type Source = z.infer<typeof SourceSchema>;
