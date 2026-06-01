@@ -7,11 +7,17 @@
 import type Database from "better-sqlite3";
 import cors from "cors";
 import express from "express";
+import { config } from "./config.js";
 import { createHealthRoutes } from "./routes/healthRoutes.js";
+import { createEvaluationRoutes } from "./routes/evaluationRoutes.js";
 import { createLibraryRoutes } from "./routes/libraryRoutes.js";
 import { createResearchRoutes } from "./routes/researchRoutes.js";
+import { createSkillRoutes } from "./routes/skillRoutes.js";
+import { createEvaluationService } from "./services/evaluationService.js";
 import { createLibraryService } from "./services/libraryService.js";
+import { createModelService } from "./services/modelService.js";
 import { createResearchService } from "./services/researchService.js";
+import { createSkillService } from "./services/skillService.js";
 
 type AppOptions = {
   db: Database.Database;
@@ -20,6 +26,11 @@ type AppOptions = {
 export function createApp({ db }: AppOptions) {
   const app = express();
   const library = createLibraryService(db);
+  const model = createModelService({
+    baseUrl: config.modelBaseUrl,
+    apiKey: config.modelApiKey,
+    modelName: config.modelName
+  });
   const research = createResearchService({
     db,
     library,
@@ -32,12 +43,16 @@ export function createApp({ db }: AppOptions) {
       };
     }
   });
+  const skillService = createSkillService({ db, library, model });
+  const evaluationService = createEvaluationService({ db, model });
 
   app.use(cors());
   app.use(express.json());
   app.use("/api", createHealthRoutes());
   app.use("/api", createLibraryRoutes(library));
   app.use("/api", createResearchRoutes(research));
+  app.use("/api", createSkillRoutes(skillService));
+  app.use("/api", createEvaluationRoutes(evaluationService));
 
   return app;
 }

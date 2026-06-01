@@ -42,33 +42,38 @@ export const FragmentSchema = z.object({
 export const SkillSchema = z.object({
   id: z.string(),
   personId: z.string(),
-  name: z.string(),
-  description: z.string(),
-  principles: z.array(z.string()),
-  evidenceFragmentIds: z.array(z.string()),
-  confidence: z.number().min(0).max(1)
+  version: z.number().int().min(1),
+  mentalModels: z.array(z.string()),
+  heuristics: z.array(z.string()),
+  voiceDna: z.array(z.string()),
+  antiPatterns: z.array(z.string()),
+  honestyBoundaries: z.array(z.string()),
+  citations: z.array(z.string()),
+  createdAt: z.string()
 });
 
 export const EvaluationSchema = z.object({
   id: z.string(),
+  projectTitle: z.string(),
+  projectBrief: z.string(),
+  skillId: z.string(),
   personId: z.string(),
-  prompt: z.string(),
-  output: z.string(),
-  scores: z.array(z.object({
-    name: z.string(),
-    value: z.number().min(0).max(1)
-  })),
-  evidenceFragmentIds: z.array(z.string()),
+  verdict: z.enum(["invest", "pass", "needs_more_evidence", "pass"]),
+  personJudgment: z.string(),
+  businessJudgment: z.string(),
+  risks: z.array(z.string()),
+  questions: z.array(z.string()),
+  score: z.record(z.number()),
   createdAt: z.string()
 });
 
 export const CritiqueSchema = z.object({
   id: z.string(),
   evaluationId: z.string(),
-  strengths: z.array(z.string()),
-  weaknesses: z.array(z.string()),
-  missingEvidence: z.array(z.string()),
-  recommendation: z.string(),
+  criticPersonId: z.string(),
+  targetPersonId: z.string(),
+  stance: z.string(),
+  critique: z.string(),
   createdAt: z.string()
 });
 

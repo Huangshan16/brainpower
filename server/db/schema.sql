@@ -36,30 +36,38 @@ create table if not exists fragments (
 create table if not exists skills (
   id text primary key,
   person_id text not null references people(id) on delete cascade,
-  name text not null,
-  description text not null,
-  principles text not null default '[]',
-  evidence_fragment_ids text not null default '[]',
-  confidence real not null check (confidence >= 0 and confidence <= 1)
+  version integer not null,
+  mental_models_json text not null default '[]',
+  heuristics_json text not null default '[]',
+  voice_dna_json text not null default '[]',
+  anti_patterns_json text not null default '[]',
+  honesty_boundaries_json text not null default '[]',
+  citations_json text not null default '[]',
+  created_at text not null
 );
 
 create table if not exists evaluations (
   id text primary key,
-  person_id text not null references people(id) on delete cascade,
-  prompt text not null,
-  output text not null,
-  scores text not null default '[]',
-  evidence_fragment_ids text not null default '[]',
+  project_title text not null,
+  project_brief text not null,
+  skill_id text not null,
+  person_id text not null,
+  verdict text not null,
+  person_judgment text not null,
+  business_judgment text not null,
+  risks_json text not null default '[]',
+  questions_json text not null default '[]',
+  score_json text not null default '{}',
   created_at text not null
 );
 
 create table if not exists critiques (
   id text primary key,
   evaluation_id text not null references evaluations(id) on delete cascade,
-  strengths text not null default '[]',
-  weaknesses text not null default '[]',
-  missing_evidence text not null default '[]',
-  recommendation text not null,
+  critic_person_id text not null,
+  target_person_id text not null,
+  stance text not null,
+  critique text not null,
   created_at text not null
 );
 
