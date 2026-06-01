@@ -1,0 +1,6 @@
+# World
+
+## 项目事实
+- Brainpower 是本地优先的数字高人矩阵 Web App。
+- 技术栈为 React、TypeScript、Node/Express、SQLite、OpenAI-compatible API。
+- 首版边界是不做账号系统，本机单人使用。
