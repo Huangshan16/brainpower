@@ -24,4 +24,26 @@ describe("App", () => {
     await userEvent.click(screen.getByRole("button", { name: "Evaluate" }));
     expect(screen.getByText(/Project brief/i)).toBeInTheDocument();
   });
+
+  test("submits a crawl request through the API client seam", async () => {
+    const calls: Array<{ personId: string; url: string }> = [];
+
+    render(
+      <App
+        api={{
+          crawlSeedUrl: async (input) => {
+            calls.push(input);
+            return { fragments: [] };
+          },
+          distillSkill: async () => ({}),
+          evaluateProject: async () => ({})
+        }}
+      />
+    );
+
+    await userEvent.type(screen.getByLabelText("Seed URL"), "https://example.com/interview");
+    await userEvent.click(screen.getByRole("button", { name: "Start crawl" }));
+
+    expect(calls[0].url).toBe("https://example.com/interview");
+  });
 });
