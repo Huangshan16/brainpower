@@ -9,3 +9,4 @@
 - 前端 seed 数据更适合显式宽类型；直接 `as const` 传给可变组件 props，容易在 readonly 与字面量状态上卡住 TypeScript build。
 - 前端纵向切片验收先补 API seam 测试，再用独立浏览器截图确认桌面三列与窄视口单列；把逻辑回归和布局回归分开验证，定位更准。
 - Playwright 浏览器录证要先把 locator 锁进明确容器，再让 Vitest/Playwright 各自只收自己的测试文件；否则测试边界会互相污染。
+- 开源 README 必须写清已实现能力、真实边界、启动方式、验证命令与贡献约束；否则仓库首页会制造错误预期。
