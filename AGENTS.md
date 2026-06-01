@@ -12,6 +12,7 @@ docs/ - 设计、规格、记忆与架构语义层 (3子目录: superpowers, dai
 <config>
 AGENTS.md - L1 项目宪法，记录顶层目录、技术栈与文档协议
 package.json - Node 工程脚本、运行依赖与开发依赖清单
+index.html - Vite 前端入口 HTML，提供 #root 挂载点
 vite.config.ts - Vite React 与 Vitest 浏览器环境配置
 tsconfig.json - 前端与共享契约 TypeScript 编译边界
 tsconfig.node.json - 后端与工具配置 TypeScript 编译边界
