@@ -18,40 +18,40 @@ export function DistillWorkspace({
   evidenceCount: number;
   api?: ApiClient;
 }) {
-  const [status, setStatus] = useState("Ready to distill.");
+  const [status, setStatus] = useState("证据片段已就绪，可以开始蒸馏人物 Skill。");
 
   async function handleDistill() {
     if (!api) {
-      setStatus("Attach an API client to distill a live skill.");
+      setStatus("请接入可用的 API client，再执行真实技能蒸馏。");
       return;
     }
 
     await api.distillSkill({ personId });
-    setStatus("Skill distilled and stored with citations.");
+    setStatus("Skill 已完成蒸馏，并带引用写入本地库。");
   }
 
   return (
     <section className="workspace-card">
       <div className="workspace-header">
-        <p className="eyebrow">Distill</p>
-        <h3>Citation-aware skill distillation</h3>
+        <p className="eyebrow">DISTILL</p>
+        <h3>技能蒸馏工作台</h3>
       </div>
       <dl className="metric-grid">
         <div>
-          <dt>Persona</dt>
+          <dt>人物</dt>
           <dd>{personName}</dd>
         </div>
         <div>
-          <dt>Evidence count</dt>
+          <dt>证据数量</dt>
           <dd>{evidenceCount}</dd>
         </div>
         <div>
-          <dt>Skill shape</dt>
-          <dd>Mental models, heuristics, voice DNA, anti-patterns</dd>
+          <dt>Skill 结构</dt>
+          <dd>心智模型、判断启发式、表达 DNA、反模式</dd>
         </div>
       </dl>
       <button onClick={() => void handleDistill()} type="button">
-        Distill skill
+        开始蒸馏
       </button>
       <p className="workspace-note">{status}</p>
     </section>

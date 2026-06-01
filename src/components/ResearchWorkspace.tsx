@@ -19,47 +19,47 @@ export function ResearchWorkspace({
   onFragmentsUpdate?: (count: number) => void;
 }) {
   const [seedUrl, setSeedUrl] = useState("");
-  const [keywords, setKeywords] = useState("founder judgement, market timing, pattern recognition");
+  const [keywords, setKeywords] = useState("投资逻辑、创始人判断、行业周期、关键复盘");
   const [crawlDepth, setCrawlDepth] = useState(2);
-  const [status, setStatus] = useState("Seed a person and start a crawl.");
+  const [status, setStatus] = useState("为当前人物补充种子链接后，即可开始采集公开资料。");
 
   async function handleStartCrawl() {
     if (!api || !seedUrl) {
-      setStatus("Enter a seed URL to queue research.");
+      setStatus("请先填写种子链接，再把采集任务送入队列。");
       return;
     }
 
     const result = await api.crawlSeedUrl({ personId, url: seedUrl });
     const count = Array.isArray(result.fragments) ? result.fragments.length : 0;
     onFragmentsUpdate?.(count);
-    setStatus(count > 0 ? `Captured ${count} fresh evidence fragment(s).` : "No new fragments; duplicate evidence was skipped.");
+    setStatus(count > 0 ? `已采集 ${count} 条新的资料片段。` : "没有新增片段，重复证据已自动跳过。");
   }
 
   return (
     <section className="workspace-card">
       <div className="workspace-header">
-        <p className="eyebrow">Research</p>
-        <h3>Evidence intake for {personName}</h3>
+        <p className="eyebrow">RESEARCH</p>
+        <h3>{personName}的证据采集</h3>
       </div>
       <label>
-        Selected person
+        当前人物
         <input value={personName} readOnly />
       </label>
       <label>
-        Seed URL
-        <input aria-label="Seed URL" onChange={(event) => setSeedUrl(event.target.value)} placeholder="https://example.com/interview" value={seedUrl} />
+        种子链接
+        <input aria-label="种子链接" onChange={(event) => setSeedUrl(event.target.value)} placeholder="https://example.com/interview" value={seedUrl} />
       </label>
       <label>
-        Keywords
+        关注主题
         <textarea onChange={(event) => setKeywords(event.target.value)} rows={4} value={keywords} />
       </label>
       <label>
-        Crawl depth
+        采集深度
         <input max={5} min={1} onChange={(event) => setCrawlDepth(Number(event.target.value))} type="number" value={crawlDepth} />
       </label>
       <div className="workspace-footer">
         <button onClick={() => void handleStartCrawl()} type="button">
-          Start crawl
+          开始采集
         </button>
         <p>{status}</p>
       </div>

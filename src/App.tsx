@@ -23,11 +23,11 @@ type SeedPerson = {
 };
 
 const seedPeople: SeedPerson[] = [
-  { id: "thiel", name: "Peter Thiel", role: "Investor", region: "US", status: "ready_to_evaluate", tags: ["contrarian", "monopoly"] },
-  { id: "shen", name: "沈南鹏", role: "Investor", region: "CN", status: "ready_to_distill", tags: ["platform", "china"] },
-  { id: "xu", name: "徐新", role: "Investor", region: "CN", status: "researching", tags: ["consumer", "retail"] },
-  { id: "musk", name: "Elon Musk", role: "Entrepreneur", region: "US", status: "researching", tags: ["first-principles", "speed"] },
-  { id: "huang", name: "黄仁勋", role: "AI Builder", region: "US", status: "ready_to_evaluate", tags: ["platform", "compute"] }
+  { id: "thiel", name: "彼得·蒂尔", role: "投资人", region: "美国", status: "ready_to_evaluate", tags: ["逆向判断", "垄断结构"] },
+  { id: "shen", name: "沈南鹏", role: "投资人", region: "中国", status: "ready_to_distill", tags: ["平台机会", "中国市场"] },
+  { id: "xu", name: "徐新", role: "投资人", region: "中国", status: "researching", tags: ["消费品牌", "零售渠道"] },
+  { id: "musk", name: "埃隆·马斯克", role: "创业者", region: "美国", status: "researching", tags: ["第一性原理", "极致速度"] },
+  { id: "huang", name: "黄仁勋", role: "AI 企业家", region: "美国", status: "ready_to_evaluate", tags: ["平台生态", "算力基础设施"] }
 ];
 
 function renderWorkspace(
@@ -68,8 +68,8 @@ export function App({ api = createApiClient() }: { api?: ApiClient }) {
     <div className="app-shell">
       <header className="app-header">
         <div>
-          <p className="eyebrow">Digital Mentor Matrix</p>
-          <h1>Digital High-Mind Matrix</h1>
+          <p className="eyebrow">AI JUDGMENT CONSOLE</p>
+          <h1>数字高人矩阵</h1>
         </div>
         <WorkflowTabs activeWorkflow={activeWorkflow} onChange={setActiveWorkflow} />
       </header>
@@ -85,7 +85,14 @@ export function App({ api = createApiClient() }: { api?: ApiClient }) {
             onFragmentsUpdate: setEvidenceCount
           })}
         </section>
-        <EvidencePanel activeWorkflow={activeWorkflow} evidenceCount={evidenceCount} personName={selectedPerson.name} />
+        <EvidencePanel
+          activeWorkflow={activeWorkflow}
+          evidenceCount={evidenceCount}
+          onSelect={setSelectedPersonId}
+          people={seedPeople.map((person) => ({ id: person.id, name: person.name }))}
+          personName={selectedPerson.name}
+          selectedPersonId={selectedPersonId}
+        />
       </main>
     </div>
   );

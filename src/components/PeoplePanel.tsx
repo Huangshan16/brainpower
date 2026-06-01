@@ -13,6 +13,12 @@ type PersonCard = {
   tags: string[];
 };
 
+const statusLabelMap: Record<string, string> = {
+  ready_to_evaluate: "可直接评审",
+  ready_to_distill: "待技能蒸馏",
+  researching: "资料采集中"
+};
+
 export function PeoplePanel({
   people,
   selectedPersonId,
@@ -25,8 +31,8 @@ export function PeoplePanel({
   return (
     <aside className="panel panel-people" aria-label="People matrix">
       <div className="panel-header">
-        <p className="eyebrow">Matrix</p>
-        <h2>People</h2>
+        <p className="eyebrow">MATRIX</p>
+        <h2>人物矩阵</h2>
       </div>
       <div className="person-list">
         {people.map((person) => (
@@ -38,7 +44,7 @@ export function PeoplePanel({
           >
             <div className="person-card-top">
               <strong>{person.name}</strong>
-              <span className={`status status-${person.status}`}>{person.status.replaceAll("_", " ")}</span>
+              <span className={`status status-${person.status}`}>{statusLabelMap[person.status] ?? person.status}</span>
             </div>
             <p>{person.role}</p>
             <p>{person.region}</p>

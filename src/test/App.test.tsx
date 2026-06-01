@@ -10,19 +10,19 @@ import { describe, expect, test } from "vitest";
 import { App } from "../App";
 
 describe("App", () => {
-  test("renders the three-panel matrix workstation and switches workflows", async () => {
+  test("renders the three-panel matrix workstation and switches workflows in Chinese", async () => {
     render(<App />);
 
-    expect(screen.getByRole("heading", { name: /Digital High-Mind Matrix/i })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /数字高人矩阵/i })).toBeInTheDocument();
     expect(screen.getByLabelText("People matrix")).toBeInTheDocument();
     expect(screen.getByLabelText("Workflow workspace")).toBeInTheDocument();
     expect(screen.getByLabelText("Evidence and output")).toBeInTheDocument();
 
-    await userEvent.click(screen.getByRole("button", { name: "Distill" }));
-    expect(screen.getByText(/Citation-aware skill distillation/i)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "蒸馏" }));
+    expect(screen.getByText(/技能蒸馏工作台/i)).toBeInTheDocument();
 
-    await userEvent.click(screen.getByRole("button", { name: "Evaluate" }));
-    expect(screen.getByText(/Project brief/i)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "评审" }));
+    expect(screen.getByText(/项目简介/i)).toBeInTheDocument();
   });
 
   test("submits a crawl request through the API client seam", async () => {
@@ -41,8 +41,8 @@ describe("App", () => {
       />
     );
 
-    await userEvent.type(screen.getByLabelText("Seed URL"), "https://example.com/interview");
-    await userEvent.click(screen.getByRole("button", { name: "Start crawl" }));
+    await userEvent.type(screen.getByLabelText("种子链接"), "https://example.com/interview");
+    await userEvent.click(screen.getByRole("button", { name: "开始采集" }));
 
     expect(calls[0].url).toBe("https://example.com/interview");
   });
@@ -65,13 +65,22 @@ describe("App", () => {
 
     const workflowTabs = within(view.container).getByRole("tablist", { name: "Workflow tabs" });
 
-    await userEvent.click(within(workflowTabs).getByRole("button", { name: /^Evaluate$/ }));
-    await userEvent.click(within(view.container).getByRole("button", { name: "Run matrix" }));
+    await userEvent.click(within(workflowTabs).getByRole("button", { name: /^评审$/ }));
+    await userEvent.click(within(view.container).getByRole("button", { name: "运行评审矩阵" }));
 
-    expect(within(view.container).getByText(/Running matrix evaluation/i)).toBeInTheDocument();
+    expect(within(view.container).getByText(/正在运行评审矩阵/i)).toBeInTheDocument();
 
     release();
 
     expect(await within(view.container).findByText(/Model request failed with status 500/i)).toBeInTheDocument();
+  });
+
+  test("switches the evidence panel person from the dropdown", async () => {
+    render(<App />);
+
+    const selector = screen.getByLabelText("右侧人物切换");
+    await userEvent.selectOptions(selector, "huang");
+
+    expect(screen.getByRole("heading", { name: "黄仁勋", level: 2 })).toBeInTheDocument();
   });
 });

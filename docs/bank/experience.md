@@ -13,3 +13,5 @@
 - 对真实模型集成，最少要处理 fenced JSON、请求超时、后端错误正文透传；否则用户侧只会看到“点击没反应”。
 - 后端调试日志至少要覆盖 requestId、模型原始返回预览、缺字段列表、写库失败上下文；不要等 SQLite 约束替你发现模型 payload 不完整。
 - 模型输出 contract 要同时写进 prompt、服务层校验和 ndjson 日志证据；只靠 prompt 是愿望，只靠数据库约束是事故。
+- 桌面端整屏工作台不要依赖层层 `calc(100vh - x)`；让 `app-shell -> app-grid -> panel` 统一进入 `min-height: 0` 与内部滚动，页面高度才能稳定收束在视口内。
+- RTL/Vitest 如果不在每个用例后执行 `cleanup()`，多个 `render()` 会把同名控件残留在 DOM 里，导致 `getByLabelText` 一类查询出现假性多匹配。

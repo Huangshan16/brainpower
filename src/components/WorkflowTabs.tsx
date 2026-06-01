@@ -7,6 +7,11 @@
 export type Workflow = "Research" | "Distill" | "Evaluate";
 
 const workflows: Workflow[] = ["Research", "Distill", "Evaluate"];
+const workflowLabelMap: Record<Workflow, string> = {
+  Research: "研究",
+  Distill: "蒸馏",
+  Evaluate: "评审"
+};
 
 export function WorkflowTabs({
   activeWorkflow,
@@ -24,7 +29,7 @@ export function WorkflowTabs({
           onClick={() => onChange(workflow)}
           type="button"
         >
-          {workflow}
+          {workflowLabelMap[workflow]}
         </button>
       ))}
     </div>
