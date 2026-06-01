@@ -69,11 +69,111 @@ describe("personaLibraryService", () => {
 
       service.softDeletePersona(person.id);
 
-      const deleted = service.listPeople().find((entry) => entry.id === person.id);
+      expect(service.listPeople().find((entry) => entry.id === person.id)).toBeUndefined();
 
-      expect(deleted?.isDeleted).toBe(true);
-      expect(deleted?.id).toBe(person.id);
-      expect(deleted && PersonaSchema.parse(deleted)).toEqual(deleted);
+      const row = db
+        .prepare("select id, is_deleted, origin_type from people where id = ?")
+        .get(person.id) as { id: string; is_deleted: number; origin_type: string } | undefined;
+
+      expect(row).toEqual({
+        id: person.id,
+        is_deleted: 1,
+        origin_type: "manual"
+      });
+    } finally {
+      db.close();
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("re-importing a soft-deleted nuwa persona restores it to the visible library", () => {
+    const dir = mkdtempSync(join(tmpdir(), "brainpower-persona-library-"));
+    const db = openDatabase(join(dir, "test.sqlite"));
+
+    try {
+      migrate(db);
+      const service = createPersonaLibraryService(db);
+      const [imported] = service.upsertImportedPersonas([
+        {
+          name: "Paul Graham",
+          role: "entrepreneur",
+          region: "未知",
+          tags: ["nuwa-import"],
+          originType: "nuwa_import",
+          originRef: "nuwa-skill:paul-graham"
+        }
+      ]);
+
+      service.softDeletePersona(imported.id);
+      expect(service.listPeople().find((entry) => entry.id === imported.id)).toBeUndefined();
+
+      service.upsertImportedPersonas([
+        {
+          name: "Paul Graham",
+          role: "entrepreneur",
+          region: "未知",
+          tags: ["nuwa-import", "restored"],
+          originType: "nuwa_import",
+          originRef: "nuwa-skill:paul-graham"
+        }
+      ]);
+
+      const restored = service.listPeople().find((entry) => entry.originRef === "nuwa-skill:paul-graham");
+      expect(restored).toMatchObject({
+        id: imported.id,
+        isDeleted: false,
+        tags: ["nuwa-import", "restored"]
+      });
+    } finally {
+      db.close();
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("re-importing matches a legacy nuwa originRef format", () => {
+    const dir = mkdtempSync(join(tmpdir(), "brainpower-persona-library-"));
+    const db = openDatabase(join(dir, "test.sqlite"));
+
+    try {
+      migrate(db);
+      db.prepare(
+        "insert into people (id, name, role, region, tags, status, origin_type, origin_ref, persona_kind, is_archived, is_deleted, created_at, updated_at) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+      ).run(
+        "legacy-paul",
+        "Paul Graham",
+        "entrepreneur",
+        "未知",
+        '["nuwa-import"]',
+        "needs_research",
+        "nuwa_import",
+        "nuwa-skill:Paul Graham",
+        "person",
+        0,
+        0,
+        "2026-06-01T00:00:00.000Z",
+        "2026-06-01T00:00:00.000Z"
+      );
+
+      const service = createPersonaLibraryService(db);
+      const [imported] = service.upsertImportedPersonas([
+        {
+          name: "Paul Graham",
+          role: "entrepreneur",
+          region: "未知",
+          tags: ["nuwa-import", "canonical"],
+          originType: "nuwa_import",
+          originRef: "nuwa-skill:paul-graham"
+        }
+      ]);
+
+      const allPaul = service.listPeople().filter((entry) => entry.name === "Paul Graham");
+
+      expect(allPaul).toHaveLength(1);
+      expect(imported).toMatchObject({
+        id: "legacy-paul",
+        originRef: "nuwa-skill:paul-graham",
+        tags: ["nuwa-import", "canonical"]
+      });
     } finally {
       db.close();
       rmSync(dir, { recursive: true, force: true });

@@ -15,6 +15,9 @@ describe("nuwaGatewayService", () => {
 - Paul Graham
 - 张一鸣
 - Karpathy
+
+## 工作原理
+- 这不是人物
 `
     });
 
@@ -22,10 +25,16 @@ describe("nuwaGatewayService", () => {
 
     expect(personas.map((persona) => persona.name)).toEqual(expect.arrayContaining(["Paul Graham", "张一鸣", "Karpathy"]));
     expect(personas).toHaveLength(3);
-    expect(personas[0]).toMatchObject({
-      role: "ai_builder",
+    expect(personas.find((persona) => persona.name === "Paul Graham")).toMatchObject({
+      role: "entrepreneur",
       originType: "nuwa_import",
-      originRef: "nuwa-skill:Paul Graham"
+      region: "未知",
+      originRef: "nuwa-skill:paul-graham"
     });
+    expect(personas.find((persona) => persona.name === "Karpathy")).toMatchObject({
+      role: "ai_builder",
+      region: "未知"
+    });
+    expect(personas.map((persona) => persona.name)).not.toContain("这不是人物");
   });
 });

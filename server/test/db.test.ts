@@ -309,6 +309,228 @@ describe("database schema", () => {
     }
   });
 
+  test("canonicalizes and deduplicates legacy nuwa origin refs before enforcing uniqueness", () => {
+    const dir = mkdtempSync(join(tmpdir(), "brainpower-db-"));
+    const db = openDatabase(join(dir, "test.sqlite"));
+
+    try {
+      db.exec(`
+        create table people (
+          id text primary key,
+          name text not null,
+          role text not null,
+          region text not null,
+          tags text not null default '[]',
+          status text not null,
+          notes text,
+          origin_type text not null,
+          origin_ref text,
+          persona_kind text not null,
+          is_archived integer not null,
+          is_deleted integer not null,
+          created_at text not null,
+          updated_at text not null
+        );
+      `);
+      db.exec(`
+        create table sources (
+          id text primary key,
+          person_id text not null,
+          url text not null,
+          title text not null,
+          source_type text not null,
+          trust_level text not null,
+          crawl_status text not null,
+          fetched_at text,
+          created_at text not null
+        );
+      `);
+      db.exec(`
+        create table fragments (
+          id text primary key,
+          source_id text not null,
+          person_id text not null,
+          content text not null,
+          summary text not null,
+          timeline_tag text not null,
+          evidence_type text not null,
+          created_at text not null
+        );
+      `);
+      db.exec(`
+        create table skills (
+          id text primary key,
+          person_id text not null,
+          version integer not null,
+          mental_models_json text not null,
+          heuristics_json text not null,
+          voice_dna_json text not null,
+          anti_patterns_json text not null,
+          honesty_boundaries_json text not null,
+          citations_json text not null,
+          created_at text not null
+        );
+      `);
+      db.exec(`
+        create table evaluations (
+          id text primary key,
+          project_title text not null,
+          project_brief text not null,
+          skill_id text not null,
+          person_id text not null,
+          verdict text not null,
+          person_judgment text not null,
+          business_judgment text not null,
+          risks_json text not null,
+          questions_json text not null,
+          score_json text not null,
+          created_at text not null
+        );
+      `);
+      db.exec(`
+        create table critiques (
+          id text primary key,
+          evaluation_id text not null,
+          critic_person_id text not null,
+          target_person_id text not null,
+          stance text not null,
+          critique text not null,
+          created_at text not null
+        );
+      `);
+      db.exec(`
+        create table jobs (
+          id text primary key,
+          type text not null,
+          status text not null,
+          person_id text,
+          input text not null,
+          output text not null,
+          error text,
+          created_at text not null,
+          updated_at text not null
+        );
+      `);
+      db.exec(`
+        create table conversations (
+          id text primary key,
+          title text not null,
+          mode text not null,
+          status text not null,
+          created_at text not null,
+          updated_at text not null
+        );
+      `);
+      db.exec(`
+        create table conversation_participants (
+          conversation_id text not null,
+          person_id text not null,
+          skill_id text not null,
+          join_source text not null,
+          position integer not null,
+          is_active integer not null default 1,
+          primary key (conversation_id, person_id, skill_id)
+        );
+      `);
+      db.prepare(
+        "insert into people (id, name, role, region, tags, status, notes, origin_type, origin_ref, persona_kind, is_archived, is_deleted, created_at, updated_at) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+      ).run(
+        "legacy-paul",
+        "Paul Graham",
+        "entrepreneur",
+        "未知",
+        "[]",
+        "needs_research",
+        null,
+        "nuwa_import",
+        "nuwa-skill:Paul Graham",
+        "person",
+        0,
+        0,
+        "2026-06-01T00:00:00.000Z",
+        "2026-06-01T00:00:00.000Z"
+      );
+      db.prepare(
+        "insert into people (id, name, role, region, tags, status, notes, origin_type, origin_ref, persona_kind, is_archived, is_deleted, created_at, updated_at) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+      ).run(
+        "canonical-paul",
+        "Paul Graham",
+        "entrepreneur",
+        "未知",
+        "[]",
+        "needs_research",
+        null,
+        "nuwa_import",
+        "nuwa-skill:paul-graham",
+        "person",
+        0,
+        1,
+        "2026-06-02T00:00:00.000Z",
+        "2026-06-02T00:00:00.000Z"
+      );
+      db.prepare(
+        "insert into evaluations (id, project_title, project_brief, skill_id, person_id, verdict, person_judgment, business_judgment, risks_json, questions_json, score_json, created_at) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+      ).run(
+        "eval-1",
+        "AI founder OS",
+        "brief",
+        "skill-1",
+        "canonical-paul",
+        "invest",
+        "strong",
+        "credible",
+        "[]",
+        "[]",
+        "{}",
+        "2026-06-02T00:00:00.000Z"
+      );
+      db.prepare(
+        "insert into critiques (id, evaluation_id, critic_person_id, target_person_id, stance, critique, created_at) values (?, ?, ?, ?, ?, ?, ?)"
+      ).run("crit-1", "eval-1", "canonical-paul", "legacy-paul", "agree", "same person", "2026-06-02T00:00:00.000Z");
+
+      migrate(db);
+
+      const rows = db
+        .prepare("select id, origin_ref, is_deleted from people order by created_at asc, id asc")
+        .all() as Array<{ id: string; origin_ref: string; is_deleted: number }>;
+      const evaluation = db
+        .prepare("select person_id from evaluations where id = ?")
+        .get("eval-1") as { person_id: string };
+      const critique = db
+        .prepare("select critic_person_id, target_person_id from critiques where id = ?")
+        .get("crit-1") as { critic_person_id: string; target_person_id: string };
+
+      expect(rows).toEqual([{ id: "legacy-paul", origin_ref: "nuwa-skill:paul-graham", is_deleted: 0 }]);
+      expect(evaluation).toEqual({ person_id: "legacy-paul" });
+      expect(critique).toEqual({ critic_person_id: "legacy-paul", target_person_id: "legacy-paul" });
+      expect(() =>
+        db
+          .prepare(
+            "insert into people (id, name, role, region, tags, status, notes, origin_type, origin_ref, persona_kind, is_archived, is_deleted, created_at, updated_at) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+          )
+          .run(
+            "duplicate-paul",
+            "Paul Graham",
+            "entrepreneur",
+            "未知",
+            "[]",
+            "needs_research",
+            null,
+            "nuwa_import",
+            "nuwa-skill:paul-graham",
+            "person",
+            0,
+            0,
+            "2026-06-03T00:00:00.000Z",
+            "2026-06-03T00:00:00.000Z"
+          )
+      ).toThrow();
+    } finally {
+      db.close();
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   test("rebuilds legacy conversation_participants and keeps only valid rows", () => {
     const dir = mkdtempSync(join(tmpdir(), "brainpower-db-"));
     const db = openDatabase(join(dir, "test.sqlite"));

@@ -75,16 +75,91 @@ describe("app routes", () => {
         const imported = await fetch(`http://127.0.0.1:${port}/api/personas/import/nuwa`, { method: "POST" });
         const importedBody = await imported.json();
         const list = await fetch(`http://127.0.0.1:${port}/api/personas`).then((res) => res.json());
+        const [firstImported] = importedBody.imported as Array<{ id: string }>;
+        const deleted = await fetch(`http://127.0.0.1:${port}/api/personas/${firstImported.id}`, { method: "DELETE" });
+        const personaListAfterDelete = await fetch(`http://127.0.0.1:${port}/api/personas`).then((res) => res.json());
+        const peopleListAfterDelete = await fetch(`http://127.0.0.1:${port}/api/people`).then((res) => res.json());
 
         expect(imported.status).toBe(202);
         expect(importedBody.imported).toHaveLength(2);
         expect(list.people.map((person: { name: string }) => person.name)).toEqual(expect.arrayContaining(["Paul Graham", "张一鸣"]));
+        expect(deleted.status).toBe(204);
+        expect(personaListAfterDelete.people.map((person: { id: string }) => person.id)).not.toContain(firstImported.id);
+        expect(peopleListAfterDelete.map((person: { id: string }) => person.id)).not.toContain(firstImported.id);
       } finally {
         await closeServer(server);
       }
     } finally {
       db.close();
       rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("returns a stable gateway error when nuwa import fails", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "brainpower-app-"));
+    const db = openDatabase(join(dir, "test.sqlite"));
+
+    try {
+      migrate(db);
+      const app = createApp({
+        db,
+        nuwaGateway: {
+          fetchReadme: async () => {
+            throw new Error("README unavailable");
+          }
+        }
+      });
+      const server = app.listen(0);
+      const port = (server.address() as { port: number }).port;
+
+      try {
+        const response = await fetch(`http://127.0.0.1:${port}/api/personas/import/nuwa`, { method: "POST" });
+        const body = await response.json();
+
+        expect(response.status).toBe(502);
+        expect(body).toEqual({ error: "Failed to import nuwa personas" });
+      } finally {
+        await closeServer(server);
+      }
+    } finally {
+      db.close();
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("returns a stable persistence error when imported personas cannot be saved", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "brainpower-app-"));
+    const db = openDatabase(join(dir, "test.sqlite"));
+
+    try {
+      migrate(db);
+      const app = createApp({
+        db,
+        nuwaGateway: {
+          fetchReadme: async () => `
+## 已蒸馏人物
+- Paul Graham
+`
+        }
+      });
+      const server = app.listen(0);
+      const port = (server.address() as { port: number }).port;
+
+      db.close();
+
+      try {
+        const response = await fetch(`http://127.0.0.1:${port}/api/personas/import/nuwa`, { method: "POST" });
+        const body = await response.json();
+
+        expect(response.status).toBe(500);
+        expect(body).toEqual({ error: "Failed to persist imported personas" });
+      } finally {
+        await closeServer(server);
+        rmSync(dir, { recursive: true, force: true });
+      }
+    } catch (error) {
+      rmSync(dir, { recursive: true, force: true });
+      throw error;
     }
   });
 

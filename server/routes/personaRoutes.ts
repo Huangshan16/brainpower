@@ -19,9 +19,20 @@ export function createPersonaRoutes(personaLibrary: PersonaLibraryService, nuwaG
   });
 
   router.post("/personas/import/nuwa", async (_req, res) => {
-    const imported = await nuwaGateway.listImportedPersonas();
+    let imported;
 
-    res.status(202).json({ imported: personaLibrary.upsertImportedPersonas(imported) });
+    try {
+      imported = await nuwaGateway.listImportedPersonas();
+    } catch {
+      res.status(502).json({ error: "Failed to import nuwa personas" });
+      return;
+    }
+
+    try {
+      res.status(202).json({ imported: personaLibrary.upsertImportedPersonas(imported) });
+    } catch {
+      res.status(500).json({ error: "Failed to persist imported personas" });
+    }
   });
 
   router.delete("/personas/:personId", (req, res) => {

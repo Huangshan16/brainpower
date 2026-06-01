@@ -40,6 +40,18 @@ type ImportedPersonaInput = {
   originRef: string;
 };
 
+function canonicalizeOriginRef(originRef: string) {
+  if (!originRef.startsWith("nuwa-skill:")) {
+    return originRef;
+  }
+
+  return `nuwa-skill:${originRef
+    .slice("nuwa-skill:".length)
+    .trim()
+    .toLowerCase()
+    .replaceAll(/\s+/g, "-")}`;
+}
+
 function now() {
   return new Date().toISOString();
 }
@@ -75,19 +87,23 @@ function selectPersonaById(db: Database.Database, id: string) {
 }
 
 function selectPersonaByOriginRef(db: Database.Database, originRef: string) {
-  return db
-    .prepare(
-      "select id, name, role, region, tags, status, notes, origin_type, origin_ref, persona_kind, is_archived, is_deleted from people where origin_ref = ? order by created_at asc limit 1"
-    )
-    .get(originRef) as PersonaRow | undefined;
-}
+  const canonicalOriginRef = canonicalizeOriginRef(originRef);
 
-function selectPersonaByName(db: Database.Database, name: string) {
-  return db
+  if (!canonicalOriginRef.startsWith("nuwa-skill:")) {
+    return db
+      .prepare(
+        "select id, name, role, region, tags, status, notes, origin_type, origin_ref, persona_kind, is_archived, is_deleted from people where origin_ref = ? order by created_at asc limit 1"
+      )
+      .get(canonicalOriginRef) as PersonaRow | undefined;
+  }
+
+  const rows = db
     .prepare(
-      "select id, name, role, region, tags, status, notes, origin_type, origin_ref, persona_kind, is_archived, is_deleted from people where name = ? order by created_at asc limit 1"
+      "select id, name, role, region, tags, status, notes, origin_type, origin_ref, persona_kind, is_archived, is_deleted from people where origin_type = 'nuwa_import' and origin_ref like 'nuwa-skill:%' order by created_at asc, id asc"
     )
-    .get(name) as PersonaRow | undefined;
+    .all() as PersonaRow[];
+
+  return rows.find((row) => row.origin_ref && canonicalizeOriginRef(row.origin_ref) === canonicalOriginRef);
 }
 
 function insertPersona(
@@ -145,15 +161,26 @@ function updatePersona(
     tags: string[];
     originType: Persona["originType"];
     originRef: string | null;
+    restoreVisibility?: boolean;
   }
 ) {
   const timestamp = now();
 
   db.prepare(
     `update people
-     set name = ?, role = ?, region = ?, tags = ?, origin_type = ?, origin_ref = ?, updated_at = ?
+     set name = ?, role = ?, region = ?, tags = ?, origin_type = ?, origin_ref = ?, is_deleted = ?, updated_at = ?
      where id = ?`
-  ).run(input.name, input.role, input.region, JSON.stringify(input.tags), input.originType, input.originRef, timestamp, row.id);
+  ).run(
+    input.name,
+    input.role,
+    input.region,
+    JSON.stringify(input.tags),
+    input.originType,
+    input.originRef,
+    input.restoreVisibility ? 0 : row.is_deleted,
+    timestamp,
+    row.id
+  );
 
   const updated = selectPersonaById(db, row.id);
 
@@ -179,7 +206,7 @@ export function createPersonaLibraryService(db: Database.Database) {
       const ordered: ImportedPersonaInput[] = [];
 
       for (const persona of input) {
-        const key = persona.originRef || persona.name;
+        const key = persona.originRef;
 
         if (seen.has(key)) {
           continue;
@@ -190,7 +217,7 @@ export function createPersonaLibraryService(db: Database.Database) {
       }
 
       return ordered.map((persona) => {
-        const existing = selectPersonaByOriginRef(db, persona.originRef) ?? selectPersonaByName(db, persona.name);
+        const existing = selectPersonaByOriginRef(db, persona.originRef);
 
         if (!existing) {
           return insertPersona(db, {
@@ -199,7 +226,7 @@ export function createPersonaLibraryService(db: Database.Database) {
             region: persona.region,
             tags: persona.tags,
             originType: persona.originType,
-            originRef: persona.originRef
+            originRef: canonicalizeOriginRef(persona.originRef)
           });
         }
 
@@ -209,7 +236,8 @@ export function createPersonaLibraryService(db: Database.Database) {
           region: persona.region,
           tags: persona.tags,
           originType: persona.originType,
-          originRef: persona.originRef
+          originRef: canonicalizeOriginRef(persona.originRef),
+          restoreVisibility: true
         });
       });
     },
@@ -217,7 +245,7 @@ export function createPersonaLibraryService(db: Database.Database) {
     listPeople(): Persona[] {
       const rows = db
         .prepare(
-          "select id, name, role, region, tags, status, notes, origin_type, origin_ref, persona_kind, is_archived, is_deleted from people order by created_at asc, name asc"
+          "select id, name, role, region, tags, status, notes, origin_type, origin_ref, persona_kind, is_archived, is_deleted from people where is_deleted = 0 order by created_at asc, name asc"
         )
         .all() as PersonaRow[];
 

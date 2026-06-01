@@ -1,6 +1,6 @@
 /**
  * [INPUT]: 依赖 fs 读取 schema.sql，依赖 better-sqlite3 执行 DDL
- * [OUTPUT]: 对外提供 migrate 函数，按需补齐旧库缺失的添加性字段，并重建 conversation_participants 以补齐外键与检查约束
+ * [OUTPUT]: 对外提供 migrate 函数，按需补齐旧库缺失的添加性字段、归一化 persona origin_ref，并重建 conversation_participants 以补齐外键与检查约束
  * [POS]: server/db 的 schema 初始化器，被启动流程与测试消费
  * [PROTOCOL]: 变更时更新此头部，然后检查 AGENTS.md
  */
@@ -38,6 +38,9 @@ export function migrate(db: Database.Database) {
   if (!peopleColumns.has("is_deleted")) {
     db.exec("alter table people add column is_deleted integer not null default 0");
   }
+
+  normalizePersonaOriginRefs(db);
+  db.exec("create unique index if not exists people_origin_ref_unique on people(origin_ref) where origin_ref is not null");
 
   const participantSchema = db
     .prepare("select sql from sqlite_master where type = 'table' and name = 'conversation_participants'")
@@ -78,6 +81,90 @@ export function migrate(db: Database.Database) {
       select raise(abort, 'invalid persona metadata');
     end;
   `);
+}
+
+type OriginRefRow = {
+  id: string;
+  origin_ref: string;
+  is_deleted: number;
+  created_at: string;
+};
+
+function canonicalizeOriginRef(originRef: string) {
+  if (!originRef.startsWith("nuwa-skill:")) {
+    return originRef;
+  }
+
+  return `nuwa-skill:${originRef
+    .slice("nuwa-skill:".length)
+    .trim()
+    .toLowerCase()
+    .replaceAll(/\s+/g, "-")}`;
+}
+
+function normalizePersonaOriginRefs(db: Database.Database) {
+  const normalize = db.transaction(() => {
+    const rows = db
+      .prepare(
+        "select id, origin_ref, is_deleted, created_at from people where origin_ref is not null order by created_at asc, id asc"
+      )
+      .all() as OriginRefRow[];
+    const groups = new Map<string, OriginRefRow[]>();
+
+    for (const row of rows) {
+      const canonicalOriginRef = canonicalizeOriginRef(row.origin_ref);
+
+      if (canonicalOriginRef !== row.origin_ref) {
+        db.prepare("update people set origin_ref = ?, updated_at = current_timestamp where id = ?").run(canonicalOriginRef, row.id);
+      }
+
+      const group = groups.get(canonicalOriginRef) ?? [];
+      group.push({ ...row, origin_ref: canonicalOriginRef });
+      groups.set(canonicalOriginRef, group);
+    }
+
+    for (const [canonicalOriginRef, group] of groups.entries()) {
+      if (group.length < 2) {
+        continue;
+      }
+
+      const [survivor, ...duplicates] = [...group].sort((left, right) => {
+        if (left.is_deleted !== right.is_deleted) {
+          return left.is_deleted - right.is_deleted;
+        }
+
+        if (left.created_at !== right.created_at) {
+          return left.created_at.localeCompare(right.created_at);
+        }
+
+        return left.id.localeCompare(right.id);
+      });
+
+      db.prepare("update people set origin_ref = ?, updated_at = current_timestamp where id = ?").run(
+        canonicalOriginRef,
+        survivor.id
+      );
+
+      for (const duplicate of duplicates) {
+        reassignPersonReferences(db, duplicate.id, survivor.id);
+        db.prepare("delete from people where id = ?").run(duplicate.id);
+      }
+    }
+  });
+
+  normalize();
+}
+
+function reassignPersonReferences(db: Database.Database, fromPersonId: string, toPersonId: string) {
+  db.prepare("update sources set person_id = ? where person_id = ?").run(toPersonId, fromPersonId);
+  db.prepare("update fragments set person_id = ? where person_id = ?").run(toPersonId, fromPersonId);
+  db.prepare("update skills set person_id = ? where person_id = ?").run(toPersonId, fromPersonId);
+  db.prepare("update evaluations set person_id = ? where person_id = ?").run(toPersonId, fromPersonId);
+  db.prepare("update critiques set critic_person_id = ? where critic_person_id = ?").run(toPersonId, fromPersonId);
+  db.prepare("update critiques set target_person_id = ? where target_person_id = ?").run(toPersonId, fromPersonId);
+  db.prepare("update jobs set person_id = ? where person_id = ?").run(toPersonId, fromPersonId);
+  db.prepare("update or ignore conversation_participants set person_id = ? where person_id = ?").run(toPersonId, fromPersonId);
+  db.prepare("delete from conversation_participants where person_id = ?").run(fromPersonId);
 }
 
 function rebuildConversationParticipants(db: Database.Database) {

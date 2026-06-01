@@ -17,6 +17,21 @@ type NuwaGatewayOptions = {
 
 const DEFAULT_README_URL = "https://raw.githubusercontent.com/alchaincyf/nuwa-skill/main/README.md";
 
+const ROLE_BY_NAME: Record<string, Persona["role"]> = {
+  "paul graham": "entrepreneur",
+  "张一鸣": "entrepreneur",
+  karpathy: "ai_builder",
+  "ilya sutskever": "ai_builder",
+  "elon musk": "entrepreneur",
+  "steve jobs": "entrepreneur",
+  naval: "investor",
+  munger: "investor",
+  taleb: "investor",
+  feynman: "ai_builder",
+  trump: "entrepreneur",
+  mrbeast: "entrepreneur"
+};
+
 function defaultFetchReadme() {
   return fetch(DEFAULT_README_URL).then(async (response) => {
     if (!response.ok) {
@@ -28,7 +43,7 @@ function defaultFetchReadme() {
 }
 
 function parsePersonaNames(readme: string) {
-  const section = readme.split("## 已蒸馏人物")[1] ?? "";
+  const section = readme.match(/## 已蒸馏人物([\s\S]*?)(?:\n## |\n# |$)/)?.[1] ?? "";
 
   return section
     .split("\n")
@@ -36,6 +51,14 @@ function parsePersonaNames(readme: string) {
     .filter((line) => line.startsWith("- "))
     .map((line) => line.replace(/^- /, "").trim())
     .filter(Boolean);
+}
+
+function inferRole(name: string): Persona["role"] {
+  return ROLE_BY_NAME[name.trim().toLowerCase()] ?? "entrepreneur";
+}
+
+function toOriginRef(name: string) {
+  return `nuwa-skill:${name.trim().toLowerCase().replaceAll(/\s+/g, "-")}`;
 }
 
 export function createNuwaGatewayService(options: NuwaGatewayOptions = {}) {
@@ -47,11 +70,11 @@ export function createNuwaGatewayService(options: NuwaGatewayOptions = {}) {
 
       return names.map((name) => ({
         name,
-        role: "ai_builder",
-        region: "unknown",
+        role: inferRole(name),
+        region: "未知",
         tags: ["nuwa-import"],
         originType: "nuwa_import",
-        originRef: `nuwa-skill:${name}`
+        originRef: toOriginRef(name)
       }));
     }
   };

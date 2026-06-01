@@ -151,7 +151,7 @@ export function createLibraryService(db: Database.Database) {
 
     listPeople(): Person[] {
       const rows = db
-        .prepare("select id, name, role, region, tags, status, notes from people order by created_at asc, name asc")
+        .prepare("select id, name, role, region, tags, status, notes from people where is_deleted = 0 order by created_at asc, name asc")
         .all() as PersonRow[];
 
       return rows.map(mapPerson);
