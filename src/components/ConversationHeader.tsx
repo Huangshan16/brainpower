@@ -10,12 +10,16 @@ export function ConversationHeader({
   onStop
 }: {
   title: string;
-  runState: "idle" | "direct" | "group_running" | "group_stopped";
+  runState: "idle" | "direct" | "group_running" | "group_stopped" | "group_completed" | "group_failed";
   onStop: () => void;
 }) {
   const statusLabel =
     runState === "group_running"
       ? "群聊进行中"
+      : runState === "group_completed"
+        ? "群聊已完成"
+        : runState === "group_failed"
+          ? "群聊异常中断"
       : runState === "group_stopped"
         ? "群聊已停止"
         : runState === "direct"

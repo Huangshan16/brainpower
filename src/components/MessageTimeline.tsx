@@ -16,8 +16,11 @@ export function MessageTimeline({
       ) : (
         messages.map((message) => (
           <article className={`message-card message-${message.senderType}`} key={message.id}>
-            <header>
+            <header className="message-card-header">
               <strong>{message.senderName}</strong>
+              <span className="message-card-type">
+                {message.senderType === "user" ? "提问" : message.senderType === "system" ? "系统" : "观点"}
+              </span>
             </header>
             <p>{message.content}</p>
           </article>

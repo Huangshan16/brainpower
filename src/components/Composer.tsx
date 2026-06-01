@@ -10,7 +10,9 @@ export function Composer({
   onSend,
   onDirect,
   onGroup,
-  disabled
+  disabled,
+  directDisabled,
+  groupDisabled
 }: {
   draft: string;
   onChange: (value: string) => void;
@@ -18,6 +20,8 @@ export function Composer({
   onDirect: () => void;
   onGroup: () => void;
   disabled?: boolean;
+  directDisabled?: boolean;
+  groupDisabled?: boolean;
 }) {
   return (
     <section className="conversation-section composer">
@@ -29,10 +33,10 @@ export function Composer({
         <button disabled={disabled} onClick={onSend} type="button">
           发送
         </button>
-        <button className="secondary-button" disabled={disabled} onClick={onDirect} type="button">
+        <button className="secondary-button" disabled={disabled || directDisabled} onClick={onDirect} type="button">
           单聊
         </button>
-        <button className="secondary-button" disabled={disabled} onClick={onGroup} type="button">
+        <button className="secondary-button" disabled={disabled || groupDisabled} onClick={onGroup} type="button">
           群聊
         </button>
       </div>

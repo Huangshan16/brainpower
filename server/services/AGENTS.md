@@ -3,7 +3,7 @@
 > L2 | 父级: ../AGENTS.md
 
 成员清单
-conversationRunService.ts: 会话运行服务，封装 direct/group run、状态迁移与 stop 保留消息语义
+conversationRunService.ts: 会话运行服务，封装 direct/group run、多轮异步群聊、状态迁移与 stop 保留消息语义
 conversationService.ts: better-sqlite3 会话服务，封装 conversations/conversation_participants/messages 的 CRUD 与 schema 映射
 distillationService.ts: better-sqlite3 蒸馏任务 stub seam，提供 distill job 入队与后续 nuwa CLI 扩展边界
 evaluationService.ts: 项目评审服务，封装 evaluations/critiques 的模型调用、落库与 shared schema 映射

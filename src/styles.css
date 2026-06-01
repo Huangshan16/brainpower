@@ -361,6 +361,7 @@ button {
   min-height: 0;
   overflow: auto;
   padding-right: 4px;
+  align-content: start;
 }
 
 .message-card {
@@ -370,9 +371,28 @@ button {
   background: rgba(255, 255, 255, 0.03);
 }
 
+.message-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.message-card-type {
+  color: #b7aa9b;
+  font-size: 0.78rem;
+}
+
 .message-card p,
 .section-heading h4 {
   margin: 0;
+}
+
+.message-card p {
+  white-space: pre-wrap;
+  word-break: break-word;
+  line-height: 1.6;
 }
 
 .message-user {

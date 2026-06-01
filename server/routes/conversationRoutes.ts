@@ -64,6 +64,17 @@ export function createConversationRoutes(conversations: ConversationService, run
     res.status(201).json(conversations.createConversation(input.data));
   });
 
+  router.get("/conversations/:conversationId/runs/:runId", (req, res) => {
+    const run = runs.getRun(req.params.runId);
+
+    if (!run || run.conversationId !== req.params.conversationId) {
+      res.status(404).json({ error: "Conversation run not found" });
+      return;
+    }
+
+    res.json(run);
+  });
+
   router.get("/conversations/:conversationId/participants", (req, res) => {
     res.json({ participants: conversations.listParticipants(req.params.conversationId) });
   });

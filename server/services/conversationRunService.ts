@@ -29,6 +29,12 @@ type ReplyPayload = {
   reply: string;
 };
 
+function wait(ms: number) {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
+}
+
 function now() {
   return new Date().toISOString();
 }
@@ -73,15 +79,132 @@ async function generateReply(
   return parsed.reply;
 }
 
+function buildGroupPrompt(conversations: ConversationService, conversationId: string, rootMessageId: string, round: number) {
+  const recent = conversations
+    .listMessages(conversationId)
+    .slice(-6)
+    .map((message) => `${message.senderType}:${message.senderId}: ${message.content}`)
+    .join("\n");
+
+  return round === 0 ? recent : `第 ${round + 1} 轮群聊，请基于最近消息继续回应、反驳或补充。\n${recent}\nroot:${rootMessageId}`;
+}
+
+function isRunStillRunning(db: Database.Database, runId: string) {
+  const row = getRunRow(db, runId);
+  return row?.status === "running";
+}
+
 export function createConversationRunService({
   db,
   conversations,
-  model
+  model,
+  maxRounds = 3,
+  roundDelayMs = 1200
 }: {
   db: Database.Database;
   conversations: ConversationService;
   model: ModelService;
+  maxRounds?: number;
+  roundDelayMs?: number;
 }) {
+  async function processGroupRun(runId: string, input: { conversationId: string; messageId: string }) {
+    const sourceMessage = conversations.getMessage(input.messageId);
+
+    if (!sourceMessage) {
+      db.prepare("update conversation_runs set status = ?, stop_reason = ?, updated_at = ? where id = ?").run(
+        "failed",
+        "source_message_missing",
+        now(),
+        runId
+      );
+      return;
+    }
+
+    const participants = conversations.listParticipants(input.conversationId).filter((participant) => participant.isActive);
+
+    if (participants.length === 0) {
+      conversations.createMessage({
+        conversationId: input.conversationId,
+        senderType: "system",
+        senderId: "system",
+        content: "没有可参与群聊的人物。",
+        replyToMessageId: input.messageId,
+        meta: { runId, mode: "group", participantCount: 0 }
+      });
+      db.prepare("update conversation_runs set status = ?, updated_at = ? where id = ?").run("completed", now(), runId);
+      return;
+    }
+
+    try {
+      for (let round = 0; round < maxRounds; round += 1) {
+        if (!isRunStillRunning(db, runId)) {
+          return;
+        }
+
+        for (const participant of participants) {
+          if (!isRunStillRunning(db, runId)) {
+            return;
+          }
+
+          const reply = await generateReply(model, {
+            conversationId: input.conversationId,
+            personId: participant.personId,
+            userMessage: buildGroupPrompt(conversations, input.conversationId, input.messageId, round),
+            mode: "group"
+          });
+
+          if (!isRunStillRunning(db, runId)) {
+            return;
+          }
+
+          conversations.createMessage({
+            conversationId: input.conversationId,
+            senderType: "persona",
+            senderId: participant.personId,
+            content: reply,
+            replyToMessageId: input.messageId,
+            meta: { runId, mode: "group", skillId: participant.skillId, round: round + 1 }
+          });
+        }
+
+        conversations.createMessage({
+          conversationId: input.conversationId,
+          senderType: "system",
+          senderId: "system",
+          content: round + 1 >= maxRounds ? `群聊已完成第 ${round + 1} 轮，并自动结束。` : `群聊已完成第 ${round + 1} 轮，准备进入下一轮。`,
+          replyToMessageId: input.messageId,
+          meta: { runId, mode: "group", participantCount: participants.length, round: round + 1 }
+        });
+
+        if (round + 1 >= maxRounds) {
+          db.prepare("update conversation_runs set status = ?, updated_at = ? where id = ?").run("completed", now(), runId);
+          return;
+        }
+
+        await wait(roundDelayMs);
+      }
+    } catch (error) {
+      try {
+        conversations.createMessage({
+          conversationId: input.conversationId,
+          senderType: "system",
+          senderId: "system",
+          content: error instanceof Error ? `群聊中断：${error.message}` : "群聊中断。",
+          replyToMessageId: input.messageId,
+          meta: { runId, mode: "group", failed: true }
+        });
+        db.prepare("update conversation_runs set status = ?, stop_reason = ?, updated_at = ? where id = ?").run(
+          "failed",
+          error instanceof Error ? error.message : "group_run_failed",
+          now(),
+          runId
+        );
+      } catch {
+        // 后台 run 在进程退出或测试关闭数据库后无需继续上报失败消息。
+      }
+    }
+  }
+
   return {
     getRun(runId: string) {
       const row = getRunRow(db, runId);
@@ -148,37 +271,7 @@ export function createConversationRunService({
           id, conversation_id, mode, status, message_id, speaker_person_id, stop_reason, created_at, updated_at
         ) values (?, ?, ?, ?, ?, ?, ?, ?, ?)`
       ).run(id, input.conversationId, "group", "running", input.messageId, null, null, timestamp, timestamp);
-
-      const participants = conversations.listParticipants(input.conversationId).filter((participant) => participant.isActive);
-
-      for (const participant of participants) {
-        const reply = await generateReply(model, {
-          conversationId: input.conversationId,
-          personId: participant.personId,
-          userMessage: sourceMessage.content,
-          mode: "group"
-        });
-
-        conversations.createMessage({
-          conversationId: input.conversationId,
-          senderType: "persona",
-          senderId: participant.personId,
-          content: reply,
-          replyToMessageId: input.messageId,
-          meta: { runId: id, mode: "group", skillId: participant.skillId }
-        });
-      }
-
-      conversations.createMessage({
-        conversationId: input.conversationId,
-        senderType: "system",
-        senderId: "system",
-        content: participants.length > 0 ? "群聊已完成当前轮次。" : "没有可参与群聊的人物。",
-        replyToMessageId: input.messageId,
-        meta: { runId: id, mode: "group", participantCount: participants.length }
-      });
-
-      db.prepare("update conversation_runs set updated_at = ? where id = ?").run(now(), id);
+      void processGroupRun(id, input);
 
       return mapConversationRun(getRunRow(db, id) as ConversationRunRow);
     },
@@ -201,6 +294,17 @@ export function createConversationRunService({
 
       if (result.changes === 0) {
         throw new Error("Conversation run not found");
+      }
+
+      if (row.mode === "group") {
+        conversations.createMessage({
+          conversationId: row.conversation_id,
+          senderType: "system",
+          senderId: "system",
+          content: "群聊已终止。",
+          replyToMessageId: row.message_id,
+          meta: { runId, mode: "group", stopped: true }
+        });
       }
 
       return mapConversationRun(getRunRow(db, runId) as ConversationRunRow);

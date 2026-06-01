@@ -37,7 +37,9 @@ const personas = [
 
 test("records a full browser conversation workflow", async ({ page }, testInfo) => {
   const messages: Array<{ id: string; senderType: string; senderId: string; content: string }> = [];
+  let participants: Array<{ conversationId: string; personId: string; skillId: string; joinSource: string; position: number; isActive: boolean }> = [];
   let nextMessageId = 1;
+  let runStatus = "completed";
 
   await page.route("**/api/**", async (route) => {
     const request = route.request();
@@ -64,7 +66,28 @@ test("records a full browser conversation workflow", async ({ page }, testInfo) 
     }
 
     if (method === "POST" && path === "/api/conversations/conv-1/participants") {
+      const payload = JSON.parse(request.postData() ?? "{}") as { personId: string; skillId: string; joinSource: string };
+      participants = [
+        ...participants,
+        {
+          conversationId: "conv-1",
+          personId: payload.personId,
+          skillId: payload.skillId,
+          joinSource: payload.joinSource,
+          position: participants.length,
+          isActive: true
+        }
+      ];
       await route.fulfill({ status: 200, contentType: "application/json", body: "{}" });
+      return;
+    }
+
+    if (method === "GET" && path === "/api/conversations/conv-1/participants") {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ participants })
+      });
       return;
     }
 
@@ -111,6 +134,7 @@ test("records a full browser conversation workflow", async ({ page }, testInfo) 
     }
 
     if (method === "POST" && path === "/api/conversations/conv-1/run/direct") {
+      runStatus = "completed";
       messages.push({
         id: `msg-${nextMessageId++}`,
         senderType: "persona",
@@ -127,6 +151,7 @@ test("records a full browser conversation workflow", async ({ page }, testInfo) 
     }
 
     if (method === "POST" && path === "/api/conversations/conv-1/run/group") {
+      runStatus = "running";
       messages.push(
         {
           id: `msg-${nextMessageId++}`,
@@ -144,7 +169,7 @@ test("records a full browser conversation workflow", async ({ page }, testInfo) 
           id: `msg-${nextMessageId++}`,
           senderType: "system",
           senderId: "system",
-          content: "群聊已完成当前轮次。"
+          content: "群聊已完成第 1 轮，准备进入下一轮。"
         }
       );
 
@@ -156,7 +181,23 @@ test("records a full browser conversation workflow", async ({ page }, testInfo) 
       return;
     }
 
+    if (method === "GET" && path === "/api/conversations/conv-1/runs/run-group-1") {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ id: "run-group-1", conversationId: "conv-1", status: runStatus })
+      });
+      return;
+    }
+
     if (method === "POST" && path === "/api/conversations/conv-1/run/stop") {
+      runStatus = "stopped";
+      messages.push({
+        id: `msg-${nextMessageId++}`,
+        senderType: "system",
+        senderId: "system",
+        content: "群聊已终止。"
+      });
       await route.fulfill({ status: 204, body: "" });
       return;
     }

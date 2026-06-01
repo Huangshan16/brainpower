@@ -44,33 +44,72 @@ function seedConversationFixture() {
     content: "给我一句判断。"
   });
 
-  return { dir, db, conversations, conversation, person, userMessage };
+  return { dir, db, library, conversations, conversation, person, userMessage };
+}
+
+async function waitFor(check: () => boolean, timeoutMs = 500, intervalMs = 10) {
+  const start = Date.now();
+
+  while (Date.now() - start < timeoutMs) {
+    if (check()) {
+      return;
+    }
+
+    await new Promise((resolve) => {
+      setTimeout(resolve, intervalMs);
+    });
+  }
+
+  throw new Error("Timed out while waiting for condition");
 }
 
 describe("conversationRunService", () => {
-  test("stops an active group run without deleting messages", async () => {
-    const { dir, db, conversations, conversation, userMessage } = seedConversationFixture();
+  test("stops an active group run without deleting existing messages", async () => {
+    const { dir, db, library, conversations, conversation, person, userMessage } = seedConversationFixture();
 
     try {
+      const secondPerson = library.createPerson({ name: "Reid Hoffman", role: "investor", region: "US", tags: ["network"] });
+      db.prepare(
+        `insert into skills (
+          id, person_id, version, mental_models_json, heuristics_json, voice_dna_json,
+          anti_patterns_json, honesty_boundaries_json, citations_json, created_at
+        ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      ).run("skill-reid-v1", secondPerson.id, 1, "[]", "[]", "[]", "[]", "[]", "[]", "2026-06-01T00:00:00.000Z");
+      conversations.addParticipant({
+        conversationId: conversation.id,
+        personId: secondPerson.id,
+        skillId: "skill-reid-v1",
+        joinSource: "manual"
+      });
       const runs = createConversationRunService({
         db,
         conversations,
         model: {
-          completeJson: async () => JSON.stringify({ reply: "先别自嗨，先找 PMF。" })
-        }
+          completeJson: async () => {
+            await new Promise((resolve) => {
+              setTimeout(resolve, 40);
+            });
+
+            return JSON.stringify({ reply: "先别自嗨，先找 PMF。" });
+          }
+        },
+        maxRounds: 3,
+        roundDelayMs: 0
       });
       const run = await runs.startGroupRun({ conversationId: conversation.id, messageId: userMessage.id });
 
       expect(run.status).toBe("running");
-      const messagesAfterStart = conversations.listMessages(conversation.id);
-      expect(messagesAfterStart.map((message) => message.senderType)).toEqual(["user", "persona", "system"]);
-
+      const messagesBeforeStop = conversations.listMessages(conversation.id);
       const stopped = await runs.stopRun(run.id, "user_stop");
 
       expect(stopped.status).toBe("stopped");
       expect(stopped.stopReason).toBe("user_stop");
       expect(runs.getRun(run.id)).toMatchObject({ id: run.id, status: "stopped" });
-      expect(conversations.listMessages(conversation.id)).toHaveLength(messagesAfterStart.length);
+      await waitFor(() => conversations.listMessages(conversation.id).some((message) => message.content === "群聊已终止。"));
+      expect(conversations.listMessages(conversation.id).length).toBeGreaterThanOrEqual(messagesBeforeStop.length + 1);
+      await new Promise((resolve) => {
+        setTimeout(resolve, 50);
+      });
     } finally {
       db.close();
       rmSync(dir, { recursive: true, force: true });
@@ -105,6 +144,49 @@ describe("conversationRunService", () => {
           })
         ])
       );
+    } finally {
+      db.close();
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("completes a multi-round group run and marks it completed", async () => {
+    const { dir, db, library, conversations, conversation, person, userMessage } = seedConversationFixture();
+
+    try {
+      const secondPerson = library.createPerson({ name: "Reid Hoffman", role: "investor", region: "US", tags: ["network"] });
+      db.prepare(
+        `insert into skills (
+          id, person_id, version, mental_models_json, heuristics_json, voice_dna_json,
+          anti_patterns_json, honesty_boundaries_json, citations_json, created_at
+        ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      ).run("skill-reid-v1", secondPerson.id, 1, "[]", "[]", "[]", "[]", "[]", "[]", "2026-06-01T00:00:00.000Z");
+      conversations.addParticipant({
+        conversationId: conversation.id,
+        personId: secondPerson.id,
+        skillId: "skill-reid-v1",
+        joinSource: "manual"
+      });
+      const runs = createConversationRunService({
+        db,
+        conversations,
+        model: {
+          completeJson: async (_systemPrompt: string, userPrompt: string) => JSON.stringify({ reply: `回应:${userPrompt.slice(0, 18)}` })
+        },
+        maxRounds: 2,
+        roundDelayMs: 0
+      });
+
+      const run = await runs.startGroupRun({ conversationId: conversation.id, messageId: userMessage.id });
+
+      await waitFor(() => runs.getRun(run.id)?.status === "completed");
+
+      const finalRun = runs.getRun(run.id);
+      const messages = conversations.listMessages(conversation.id);
+
+      expect(finalRun?.status).toBe("completed");
+      expect(messages.filter((message) => message.senderType === "persona")).toHaveLength(4);
+      expect(messages.some((message) => message.content.includes("自动结束"))).toBe(true);
     } finally {
       db.close();
       rmSync(dir, { recursive: true, force: true });

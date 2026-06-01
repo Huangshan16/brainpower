@@ -25,6 +25,8 @@ type UiMessage = {
   content: string;
 };
 
+type RunState = "idle" | "direct" | "group_running" | "group_stopped" | "group_completed" | "group_failed";
+
 function mapSenderName(people: LibraryPerson[], senderType: string, senderId: string) {
   if (senderType === "user") {
     return "你";
@@ -50,10 +52,11 @@ export function ConversationWorkspace({
   const [participants, setParticipants] = useState<Array<{ id: string; name: string; skillId: string }>>([]);
   const [messages, setMessages] = useState<UiMessage[]>([]);
   const [draft, setDraft] = useState("你会如何判断这个项目？");
-  const [runState, setRunState] = useState<"idle" | "direct" | "group_running" | "group_stopped">("idle");
+  const [runState, setRunState] = useState<RunState>("idle");
   const [selectedAddPersonId, setSelectedAddPersonId] = useState(selectedPersonId);
   const [runId, setRunId] = useState<string | null>(null);
   const [jobNote, setJobNote] = useState("已连接对话工作台。下一步是添加人物并发起第一条消息。");
+  const [isBusy, setIsBusy] = useState(false);
 
   const peopleById = useMemo(() => new Map(libraryPeople.map((person) => [person.id, person.name])), [libraryPeople]);
 
@@ -85,6 +88,21 @@ export function ConversationWorkspace({
     return conversation.id;
   }
 
+  async function syncParticipants(nextConversationId: string) {
+    if (!api) {
+      return;
+    }
+
+    const payload = await api.listConversationParticipants({ conversationId: nextConversationId });
+    const mapped = payload.participants.map((participant) => ({
+      id: participant.personId,
+      name: peopleById.get(participant.personId) ?? participant.personId,
+      skillId: participant.skillId
+    }));
+
+    setParticipants(mapped);
+  }
+
   async function syncMessages(nextConversationId: string) {
     if (!api) {
       return;
@@ -106,6 +124,62 @@ export function ConversationWorkspace({
     setMessages(mapped);
   }
 
+  async function syncRunState(nextConversationId: string, nextRunId: string) {
+    if (!api) {
+      return;
+    }
+
+    const run = await api.getConversationRun({ conversationId: nextConversationId, runId: nextRunId });
+    const status = String(run.status ?? "running");
+
+    setRunState(
+      status === "completed" ? "group_completed" : status === "stopped" ? "group_stopped" : status === "failed" ? "group_failed" : "group_running"
+    );
+
+    if (status !== "running") {
+      setRunId(null);
+    }
+  }
+
+  useEffect(() => {
+    if (!api || !conversationId || !runId || runState !== "group_running") {
+      return;
+    }
+
+    const timer = setInterval(() => {
+      void Promise.all([syncMessages(conversationId), syncParticipants(conversationId), syncRunState(conversationId, runId)]);
+    }, 1200);
+
+    return () => {
+      clearInterval(timer);
+    };
+  }, [api, conversationId, runId, runState]);
+
+  async function ensureParticipant(personId: string) {
+    const existing = participants.find((participant) => participant.id === personId);
+
+    if (existing) {
+      return existing;
+    }
+
+    const person = libraryPeople.find((entry) => entry.id === personId);
+
+    if (!person) {
+      throw new Error("人物不存在。");
+    }
+
+    const nextConversationId = await ensureConversation();
+    await api?.addConversationParticipant({
+      conversationId: nextConversationId,
+      personId: person.id,
+      skillId: `${person.id}-v1`,
+      joinSource: "library"
+    });
+    await syncParticipants(nextConversationId);
+
+    return { id: person.id, name: person.name, skillId: `${person.id}-v1` };
+  }
+
   async function handleAddParticipant() {
     const person = libraryPeople.find((entry) => entry.id === selectedAddPersonId);
 
@@ -119,20 +193,23 @@ export function ConversationWorkspace({
     }
 
     const nextConversationId = await ensureConversation();
-    await api.addConversationParticipant({
-      conversationId: nextConversationId,
-      personId: person.id,
-      skillId: `${person.id}-v1`,
-      joinSource: "library"
-    });
+    setIsBusy(true);
 
-    setParticipants((current) => {
-      if (current.some((participant) => participant.id === person.id)) {
-        return current;
-      }
+    try {
+      await api.addConversationParticipant({
+        conversationId: nextConversationId,
+        personId: person.id,
+        skillId: `${person.id}-v1`,
+        joinSource: "library"
+      });
+      await syncParticipants(nextConversationId);
+    } catch (error) {
+      setJobNote(error instanceof Error ? error.message : "加入会话失败。");
+      return;
+    } finally {
+      setIsBusy(false);
+    }
 
-      return [...current, { id: person.id, name: person.name, skillId: `${person.id}-v1` }];
-    });
     setJobNote(`${person.name} 已加入会话。`);
   }
 
@@ -141,13 +218,21 @@ export function ConversationWorkspace({
       return;
     }
 
-    await api.removeConversationParticipant({
-      conversationId,
-      personId: participant.id,
-      skillId: participant.skillId
-    });
-    setParticipants((current) => current.filter((entry) => entry.id !== participant.id));
-    setJobNote(`${participant.name} 已移出会话。`);
+    setIsBusy(true);
+
+    try {
+      await api.removeConversationParticipant({
+        conversationId,
+        personId: participant.id,
+        skillId: participant.skillId
+      });
+      await syncParticipants(conversationId);
+      setJobNote(`${participant.name} 已移出会话。`);
+    } catch (error) {
+      setJobNote(error instanceof Error ? error.message : "移出会话失败。");
+    } finally {
+      setIsBusy(false);
+    }
   }
 
   async function sendUserMessage() {
@@ -163,13 +248,28 @@ export function ConversationWorkspace({
       senderId: "user"
     });
 
-    await syncMessages(nextConversationId);
+    await Promise.all([syncMessages(nextConversationId), syncParticipants(nextConversationId)]);
     return { conversationId: nextConversationId, messageId: String(message.id) };
   }
 
   async function handleSend() {
-    await sendUserMessage();
-    setJobNote("消息已写入会话。你可以继续发送，或立即发起单聊 / 群聊。");
+    if (!draft.trim()) {
+      setJobNote("先输入消息。");
+      return;
+    }
+
+    setIsBusy(true);
+
+    try {
+      await sendUserMessage();
+      setDraft("");
+      setRunState("idle");
+      setJobNote("消息已写入会话。你可以继续发送，或立即发起单聊 / 群聊。");
+    } catch (error) {
+      setJobNote(error instanceof Error ? error.message : "消息发送失败。");
+    } finally {
+      setIsBusy(false);
+    }
   }
 
   async function handleDirect() {
@@ -178,22 +278,38 @@ export function ConversationWorkspace({
       return;
     }
 
-    const speaker = participants[0] ?? libraryPeople.find((person) => person.id === selectedPersonId);
-
-    if (!speaker) {
-      setJobNote("请先添加至少 1 位人物。");
+    if (!draft.trim()) {
+      setJobNote("先输入消息。");
       return;
     }
 
-    const next = await sendUserMessage();
-    await api.startDirectRun({
-      conversationId: next.conversationId,
-      messageId: next.messageId,
-      speakerPersonId: speaker.id
-    });
-    await syncMessages(next.conversationId);
-    setRunState("direct");
-    setJobNote(`${speaker.name} 已完成一轮单聊回复。`);
+    const fallbackSpeaker = libraryPeople.find((person) => person.id === selectedPersonId) ?? libraryPeople[0];
+
+    if (!fallbackSpeaker) {
+      setJobNote("请先选择 1 位人物。");
+      return;
+    }
+
+    setIsBusy(true);
+
+    try {
+      const speaker = await ensureParticipant(fallbackSpeaker.id);
+      const next = await sendUserMessage();
+      await api.startDirectRun({
+        conversationId: next.conversationId,
+        messageId: next.messageId,
+        speakerPersonId: speaker.id
+      });
+      await Promise.all([syncMessages(next.conversationId), syncParticipants(next.conversationId)]);
+      setDraft("");
+      setRunId(null);
+      setRunState("direct");
+      setJobNote(`${speaker.name} 已完成一轮单聊回复。`);
+    } catch (error) {
+      setJobNote(error instanceof Error ? error.message : "单聊失败。");
+    } finally {
+      setIsBusy(false);
+    }
   }
 
   async function handleGroup() {
@@ -202,20 +318,34 @@ export function ConversationWorkspace({
       return;
     }
 
-    if (participants.length === 0) {
-      setJobNote("群聊前至少需要 1 位人物。");
+    if (!draft.trim()) {
+      setJobNote("先输入消息。");
       return;
     }
 
-    const next = await sendUserMessage();
-    const run = await api.startGroupRun({
-      conversationId: next.conversationId,
-      messageId: next.messageId
-    });
-    await syncMessages(next.conversationId);
-    setRunId(String(run.id));
-    setRunState("group_running");
-    setJobNote("群聊已拉起，当前轮次消息已写入。");
+    if (participants.length < 2) {
+      setJobNote("群聊至少需要 2 位人物。先把更多人物加入会话。");
+      return;
+    }
+
+    setIsBusy(true);
+
+    try {
+      const next = await sendUserMessage();
+      const run = await api.startGroupRun({
+        conversationId: next.conversationId,
+        messageId: next.messageId
+      });
+      await Promise.all([syncMessages(next.conversationId), syncParticipants(next.conversationId)]);
+      setDraft("");
+      setRunId(String(run.id));
+      setRunState("group_running");
+      setJobNote("群聊已拉起，人物会继续多轮交锋，直到你终止或自动完成。");
+    } catch (error) {
+      setJobNote(error instanceof Error ? error.message : "群聊启动失败。");
+    } finally {
+      setIsBusy(false);
+    }
   }
 
   async function handleStop() {
@@ -223,9 +353,17 @@ export function ConversationWorkspace({
       return;
     }
 
-    await api.stopGroupRun({ conversationId, runId });
-    setRunState("group_stopped");
-    setJobNote("群聊已终止，但消息历史已保留。");
+    setIsBusy(true);
+
+    try {
+      await api.stopGroupRun({ conversationId, runId });
+      await Promise.all([syncMessages(conversationId), syncRunState(conversationId, runId)]);
+      setJobNote("群聊已终止，但消息历史已保留。");
+    } catch (error) {
+      setJobNote(error instanceof Error ? error.message : "终止群聊失败。");
+    } finally {
+      setIsBusy(false);
+    }
   }
 
   return (
@@ -234,7 +372,9 @@ export function ConversationWorkspace({
       <ParticipantTray onRemove={(participant) => void handleRemoveParticipant(participant)} participants={participants} />
       <MessageTimeline messages={messages} />
       <Composer
-        disabled={!api}
+        disabled={!api || isBusy || runState === "group_running"}
+        directDisabled={libraryPeople.length === 0}
+        groupDisabled={participants.length < 2 || runState === "group_running"}
         draft={draft}
         onChange={setDraft}
         onDirect={() => void handleDirect()}

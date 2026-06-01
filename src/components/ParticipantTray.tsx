@@ -11,15 +11,17 @@ export function ParticipantTray({
   participants: Array<{ id: string; name: string; skillId: string }>;
   onRemove: (participant: { id: string; name: string; skillId: string }) => void;
 }) {
+  const participantLabel = participants.length === 0 ? "暂无" : `${participants.length} 位`;
+
   return (
     <section className="conversation-section">
       <div className="section-heading">
         <h4>会话人物</h4>
-        <span>{participants.length} 位</span>
+        <span>{participantLabel}</span>
       </div>
       <div className="participant-tray">
         {participants.length === 0 ? (
-          <p className="workspace-note">先从人物库添加至少 1 位人物进入当前会话。</p>
+          <p className="workspace-note">先加入 1 位人物才能单聊，至少 2 位人物才能拉起真正的群聊。</p>
         ) : (
           participants.map((participant) => (
             <div className="participant-chip" key={`${participant.id}-${participant.skillId}`}>

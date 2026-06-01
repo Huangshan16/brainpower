@@ -50,7 +50,13 @@ export function createApp({ db, nuwaGateway: nuwaGatewayOptions, model: modelOve
       logger: createLogger("modelService"),
       timeoutMs: config.modelTimeoutMs
     });
-  const conversationRuns = createConversationRunService({ db, conversations, model });
+  const conversationRuns = createConversationRunService({
+    db,
+    conversations,
+    model,
+    maxRounds: config.groupChatMaxRounds,
+    roundDelayMs: config.groupChatRoundDelayMs
+  });
   const research = createResearchService({
     db,
     library,

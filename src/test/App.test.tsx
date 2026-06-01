@@ -39,12 +39,14 @@ function createApiMock(overrides: Partial<ApiClient> = {}): ApiClient {
     distillSkill: async () => ({}),
     evaluateProject: async () => ({}),
     createConversation: async () => ({ id: "conv-1", title: "数字高人对话", mode: "group" as const }),
+    listConversationParticipants: async () => ({ participants: [] }),
     addConversationParticipant: async () => ({}),
     removeConversationParticipant: async () => undefined,
     sendConversationMessage: async () => ({ id: "msg-1", content: "test" }),
     listConversationMessages: async () => ({ messages: [] }),
     startDirectRun: async () => ({ id: "run-1" }),
     startGroupRun: async () => ({ id: "run-2" }),
+    getConversationRun: async () => ({ id: "run-2", conversationId: "conv-1", status: "completed" }),
     stopGroupRun: async () => undefined,
     ...overrides
   };
@@ -78,7 +80,7 @@ describe("App", () => {
     })} />);
 
     await screen.findByText("Paul Graham", { selector: "strong" });
-    await userEvent.type(screen.getByLabelText("种子链接"), "https://example.com/interview");
+    await userEvent.type(await screen.findByLabelText("种子链接"), "https://example.com/interview");
     await userEvent.click(screen.getByRole("button", { name: "开始采集" }));
 
     expect(calls[0].url).toBe("https://example.com/interview");

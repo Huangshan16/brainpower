@@ -1,6 +1,6 @@
 /**
  * [INPUT]: 依赖 dotenv 读取本地环境变量，依赖 process.env 提供运行时配置
- * [OUTPUT]: 对外提供 config 常量，包含端口与 SQLite 数据库路径
+ * [OUTPUT]: 对外提供 config 常量，包含端口、SQLite、模型代理与群聊轮次配置
  * [POS]: server 的配置边界，被启动入口消费，避免业务层直接读取环境变量
  * [PROTOCOL]: 变更时更新此头部，然后检查 AGENTS.md
  */
@@ -12,5 +12,7 @@ export const config = {
   modelBaseUrl: process.env.MODEL_BASE_URL ?? "https://api.openai.com/v1",
   modelApiKey: process.env.MODEL_API_KEY ?? "",
   modelName: process.env.MODEL_NAME ?? "gpt-4.1-mini",
-  modelTimeoutMs: Number(process.env.MODEL_TIMEOUT_MS ?? 30000)
+  modelTimeoutMs: Number(process.env.MODEL_TIMEOUT_MS ?? 30000),
+  groupChatMaxRounds: Number(process.env.GROUP_CHAT_MAX_ROUNDS ?? 3),
+  groupChatRoundDelayMs: Number(process.env.GROUP_CHAT_ROUND_DELAY_MS ?? 1200)
 };

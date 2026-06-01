@@ -14,6 +14,7 @@ type PersonCard = {
 };
 
 const statusLabelMap: Record<string, string> = {
+  needs_research: "待研究",
   ready_to_evaluate: "可直接评审",
   ready_to_distill: "待技能蒸馏",
   researching: "资料采集中"
