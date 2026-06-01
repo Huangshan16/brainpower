@@ -1,6 +1,6 @@
 /**
  * [INPUT]: 依赖 vitest、fetch、Express app 工厂与临时 SQLite 数据库
- * [OUTPUT]: 对外提供 HTTP health、people 路由与 POST 输入验证回归测试
+ * [OUTPUT]: 对外提供 HTTP health、people 路由、persona import 与 POST 输入验证回归测试
  * [POS]: server/test 的应用路由测试，约束 Express 装配边界
  * [PROTOCOL]: 变更时更新此头部，然后检查 AGENTS.md
  */
@@ -43,6 +43,42 @@ describe("app routes", () => {
 
         expect(health).toEqual({ ok: true });
         expect(people).toEqual([]);
+      } finally {
+        await closeServer(server);
+      }
+    } finally {
+      db.close();
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("imports nuwa personas and lists them through persona routes", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "brainpower-app-"));
+    const db = openDatabase(join(dir, "test.sqlite"));
+
+    try {
+      migrate(db);
+      const app = createApp({
+        db,
+        nuwaGateway: {
+          fetchReadme: async () => `
+## 已蒸馏人物
+- Paul Graham
+- 张一鸣
+`
+        }
+      });
+      const server = app.listen(0);
+      const port = (server.address() as { port: number }).port;
+
+      try {
+        const imported = await fetch(`http://127.0.0.1:${port}/api/personas/import/nuwa`, { method: "POST" });
+        const importedBody = await imported.json();
+        const list = await fetch(`http://127.0.0.1:${port}/api/personas`).then((res) => res.json());
+
+        expect(imported.status).toBe(202);
+        expect(importedBody.imported).toHaveLength(2);
+        expect(list.people.map((person: { name: string }) => person.name)).toEqual(expect.arrayContaining(["Paul Graham", "张一鸣"]));
       } finally {
         await closeServer(server);
       }
