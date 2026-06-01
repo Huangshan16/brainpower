@@ -9,7 +9,9 @@ import cors from "cors";
 import express from "express";
 import { createHealthRoutes } from "./routes/healthRoutes.js";
 import { createLibraryRoutes } from "./routes/libraryRoutes.js";
+import { createResearchRoutes } from "./routes/researchRoutes.js";
 import { createLibraryService } from "./services/libraryService.js";
+import { createResearchService } from "./services/researchService.js";
 
 type AppOptions = {
   db: Database.Database;
@@ -18,11 +20,24 @@ type AppOptions = {
 export function createApp({ db }: AppOptions) {
   const app = express();
   const library = createLibraryService(db);
+  const research = createResearchService({
+    db,
+    library,
+    fetchPage: async (url) => {
+      const response = await fetch(url);
+
+      return {
+        url: response.url,
+        html: await response.text()
+      };
+    }
+  });
 
   app.use(cors());
   app.use(express.json());
   app.use("/api", createHealthRoutes());
   app.use("/api", createLibraryRoutes(library));
+  app.use("/api", createResearchRoutes(research));
 
   return app;
 }
