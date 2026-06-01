@@ -50,6 +50,19 @@ type EvaluationPayload = {
   score: Record<string, number>;
 };
 
+const EVALUATION_SYSTEM_PROMPT = `Evaluate the startup brief as a sharp digital mentor.
+Return JSON only. Do not use markdown fences.
+The response must be one JSON object with exactly these top-level keys:
+{
+  "verdict": "invest" | "pass" | "needs_more_evidence",
+  "personJudgment": "string: judgment of founder/person/team quality",
+  "businessJudgment": "string: judgment of market/product/business quality",
+  "risks": ["string"],
+  "questions": ["string"],
+  "score": { "conviction": 0, "market": 0, "team": 0, "timing": 0 }
+}
+Every key is required. Use camelCase key names exactly as shown.`;
+
 function findMissingEvaluationFields(parsed: Partial<EvaluationPayload>) {
   const missing: string[] = [];
 
@@ -115,7 +128,7 @@ export function createEvaluationService({
 
       logger.info("evaluation_started", logContext);
       const raw = await model.completeJson(
-        "Evaluate the startup brief as a sharp digital mentor. Return JSON only.",
+        EVALUATION_SYSTEM_PROMPT,
         `${input.project.title}\n\n${input.project.brief}`,
         logContext
       );

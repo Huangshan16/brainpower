@@ -141,6 +141,7 @@ MODEL_BASE_URL=https://api.openai.com/v1
 MODEL_API_KEY=replace-with-local-secret
 MODEL_NAME=gpt-4.1-mini
 MODEL_TIMEOUT_MS=30000
+LOG_FILE_PATH=logs/backend.ndjson
 CRAWLER_USER_AGENT=brainpower-local-research/0.1
 CRAWLER_RATE_LIMIT_MS=1200
 ```
@@ -174,6 +175,7 @@ http://localhost:5173/
 | `MODEL_API_KEY` | 模型 API Key | 无 |
 | `MODEL_NAME` | 默认模型名 | `gpt-4.1-mini` |
 | `MODEL_TIMEOUT_MS` | 单次模型请求超时毫秒数 | `30000` |
+| `LOG_FILE_PATH` | 后端结构化日志文件路径 | `logs/backend.ndjson` |
 | `CRAWLER_USER_AGENT` | 采集请求 User-Agent | `brainpower-local-research/0.1` |
 | `CRAWLER_RATE_LIMIT_MS` | 采集限速间隔 | `1200` |
 

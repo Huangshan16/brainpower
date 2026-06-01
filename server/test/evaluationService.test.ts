@@ -98,4 +98,44 @@ describe("evaluationService", () => {
       rmSync(dir, { recursive: true, force: true });
     }
   });
+
+  test("asks the model for the exact evaluation payload contract", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "brainpower-eval-"));
+    const db = openDatabase(join(dir, "test.sqlite"));
+    const prompts: string[] = [];
+
+    try {
+      migrate(db);
+      const model = {
+        completeJson: async (systemPrompt: string) => {
+          prompts.push(systemPrompt);
+
+          return JSON.stringify({
+            verdict: "needs_more_evidence",
+            personJudgment: "Founder signal is not yet proven.",
+            businessJudgment: "Market thesis needs sharper wedge evidence.",
+            risks: ["weak distribution"],
+            questions: ["what is the unique insight"],
+            score: { conviction: 50 }
+          });
+        }
+      };
+      const service = createEvaluationService({ db, model });
+
+      await service.evaluateProject({
+        project: { title: "AI founder OS", brief: "A cognition tool for founders." },
+        personId: "person_a",
+        skillId: "skill_a"
+      });
+
+      expect(prompts[0]).toContain("personJudgment");
+      expect(prompts[0]).toContain("businessJudgment");
+      expect(prompts[0]).toContain("risks");
+      expect(prompts[0]).toContain("questions");
+      expect(prompts[0]).toContain("score");
+    } finally {
+      db.close();
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
 });
