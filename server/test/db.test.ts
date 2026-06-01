@@ -30,11 +30,13 @@ describe("database schema", () => {
 
       expect(columnNames(rows)).toEqual([
         "conversation_participants",
+        "conversation_runs",
         "conversations",
         "critiques",
         "evaluations",
         "fragments",
         "jobs",
+        "messages",
         "people",
         "skills",
         "sources"

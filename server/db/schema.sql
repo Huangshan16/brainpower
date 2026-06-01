@@ -133,6 +133,6 @@ create table if not exists conversation_runs (
   message_id text not null references messages(id) on delete cascade,
   speaker_person_id text references people(id) on delete set null,
   stop_reason text,
-  created_at text not null,
-  updated_at text not null
+  created_at text not null default current_timestamp,
+  updated_at text not null default current_timestamp
 );

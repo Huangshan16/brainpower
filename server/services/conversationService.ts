@@ -1,7 +1,7 @@
 /**
- * [INPUT]: 依赖 better-sqlite3 持久化 conversations/conversation_participants/messages，依赖 shared/schemas 统一契约
- * [OUTPUT]: 对外提供 createConversationService 工厂与 conversation CRUD、participant、message 方法
- * [POS]: server/services 的会话持久化边界，被 conversationRoutes 与 conversationRunService 消费
+ * [INPUT]: 依赖 better-sqlite3、nanoid 与 shared conversation/message schema 管理会话、参与者与消息持久化
+ * [OUTPUT]: 对外提供 createConversationService 工厂与 conversation/participant/message 读写方法
+ * [POS]: server/services 的会话真相源，被 conversationRoutes、conversationRunService 与测试消费
  * [PROTOCOL]: 变更时更新此头部，然后检查 AGENTS.md
  */
 import type Database from "better-sqlite3";
@@ -45,24 +45,19 @@ type MessageRow = {
   created_at: string;
 };
 
-type CreateConversationInput = {
-  title: string;
-  mode: Conversation["mode"];
-};
-
-type CreateParticipantInput = {
+type AddParticipantInput = {
   conversationId: string;
   personId: string;
   skillId: string;
   joinSource: string;
+  position?: number;
 };
 
 type CreateMessageInput = {
   conversationId: string;
-  senderType: Message["senderType"];
-  senderId: string;
+  senderType?: Message["senderType"];
+  senderId?: string;
   content: string;
-  roundIndex?: number;
   replyToMessageId?: string | null;
   meta?: Record<string, unknown>;
 };
@@ -71,9 +66,9 @@ function now() {
   return new Date().toISOString();
 }
 
-function parseRecord(value: string) {
+function parseMeta(value: string) {
   const parsed = JSON.parse(value) as unknown;
-  return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? (parsed as Record<string, unknown>) : {};
+  return parsed && typeof parsed === "object" ? (parsed as Record<string, unknown>) : {};
 }
 
 function mapConversation(row: ConversationRow): Conversation {
@@ -94,7 +89,7 @@ function mapParticipant(row: ParticipantRow): ConversationParticipant {
     skillId: row.skill_id,
     joinSource: row.join_source,
     position: row.position,
-    isActive: row.is_active === 1
+    isActive: Boolean(row.is_active)
   });
 }
 
@@ -107,127 +102,134 @@ function mapMessage(row: MessageRow): Message {
     content: row.content,
     roundIndex: row.round_index,
     replyToMessageId: row.reply_to_message_id,
-    meta: parseRecord(row.meta_json),
+    meta: parseMeta(row.meta_json),
     createdAt: row.created_at
   });
 }
 
-function requireConversation(db: Database.Database, conversationId: string) {
-  const row = db.prepare("select * from conversations where id = ?").get(conversationId) as ConversationRow | undefined;
-
-  if (!row) {
-    throw new Error("Conversation not found");
-  }
-
-  return row;
+function getConversationRow(db: Database.Database, conversationId: string) {
+  return db.prepare("select * from conversations where id = ?").get(conversationId) as ConversationRow | undefined;
 }
 
-function requireSkillOwnership(db: Database.Database, personId: string, skillId: string) {
-  const row = db.prepare("select id from skills where id = ? and person_id = ?").get(skillId, personId) as { id: string } | undefined;
-
-  if (!row) {
-    throw new Error("Skill snapshot not found for participant");
-  }
+function getMessageRow(db: Database.Database, messageId: string) {
+  return db.prepare("select * from messages where id = ?").get(messageId) as MessageRow | undefined;
 }
 
-function touchConversation(db: Database.Database, conversationId: string) {
-  db.prepare("update conversations set updated_at = ? where id = ?").run(now(), conversationId);
-}
-
-function inferRoundIndex(db: Database.Database, conversationId: string) {
+function getNextParticipantPosition(db: Database.Database, conversationId: string) {
   const row = db
-    .prepare("select coalesce(max(round_index), -1) as max_round from messages where conversation_id = ?")
-    .get(conversationId) as { max_round: number };
+    .prepare("select coalesce(max(position), -1) as position from conversation_participants where conversation_id = ?")
+    .get(conversationId) as { position: number };
 
-  return row.max_round + 1;
+  return row.position + 1;
+}
+
+function getNextRoundIndex(
+  db: Database.Database,
+  conversationId: string,
+  senderType: Message["senderType"],
+  replyToMessageId?: string | null
+) {
+  if (replyToMessageId) {
+    const replied = getMessageRow(db, replyToMessageId);
+
+    if (!replied) {
+      throw new Error("Reply target message not found");
+    }
+
+    if (replied.conversation_id !== conversationId) {
+      throw new Error("Reply target message must belong to the same conversation");
+    }
+
+    return replied.round_index;
+  }
+
+  const row = db
+    .prepare("select coalesce(max(round_index), -1) as round_index from messages where conversation_id = ?")
+    .get(conversationId) as { round_index: number };
+
+  return senderType === "user" ? row.round_index + 1 : Math.max(row.round_index, 0);
 }
 
 export function createConversationService(db: Database.Database) {
   return {
-    createConversation(input: CreateConversationInput): Conversation {
+    createConversation(input: { title: string; mode: Conversation["mode"] }) {
       const id = nanoid();
       const timestamp = now();
 
       db.prepare(
-        `insert into conversations (id, title, mode, status, created_at, updated_at)
-         values (?, ?, ?, 'active', ?, ?)`
-      ).run(id, input.title, input.mode, timestamp, timestamp);
+        "insert into conversations (id, title, mode, status, created_at, updated_at) values (?, ?, ?, ?, ?, ?)"
+      ).run(id, input.title, input.mode, "active", timestamp, timestamp);
 
-      return mapConversation(db.prepare("select * from conversations where id = ?").get(id) as ConversationRow);
+      return mapConversation(getConversationRow(db, id) as ConversationRow);
     },
 
-    listConversations(): Conversation[] {
-      const rows = db.prepare("select * from conversations order by created_at asc, id asc").all() as ConversationRow[];
+    listConversations() {
+      const rows = db
+        .prepare("select * from conversations order by created_at asc, id asc")
+        .all() as ConversationRow[];
+
       return rows.map(mapConversation);
     },
 
-    getConversation(conversationId: string): Conversation {
-      return mapConversation(requireConversation(db, conversationId));
-    },
-
-    addParticipant(input: CreateParticipantInput): ConversationParticipant {
-      requireConversation(db, input.conversationId);
-      requireSkillOwnership(db, input.personId, input.skillId);
-
-      const positionRow = db
-        .prepare("select coalesce(max(position), -1) as max_position from conversation_participants where conversation_id = ?")
-        .get(input.conversationId) as { max_position: number };
-      const position = positionRow.max_position + 1;
+    addParticipant(input: AddParticipantInput) {
+      if (!getConversationRow(db, input.conversationId)) {
+        throw new Error("Conversation not found");
+      }
 
       db.prepare(
         `insert into conversation_participants (
           conversation_id, person_id, skill_id, join_source, position, is_active
-        ) values (?, ?, ?, ?, ?, 1)`
-      ).run(input.conversationId, input.personId, input.skillId, input.joinSource, position);
-
-      touchConversation(db, input.conversationId);
-
-      return mapParticipant(
-        db.prepare(
-          `select * from conversation_participants
-           where conversation_id = ? and person_id = ? and skill_id = ?`
-        ).get(input.conversationId, input.personId, input.skillId) as ParticipantRow
+        ) values (?, ?, ?, ?, ?, ?)`
+      ).run(
+        input.conversationId,
+        input.personId,
+        input.skillId,
+        input.joinSource,
+        input.position ?? getNextParticipantPosition(db, input.conversationId),
+        1
       );
+
+      const row = db
+        .prepare(
+          "select * from conversation_participants where conversation_id = ? and person_id = ? and skill_id = ?"
+        )
+        .get(input.conversationId, input.personId, input.skillId) as ParticipantRow | undefined;
+
+      if (!row) {
+        throw new Error("Conversation participant insert failed");
+      }
+
+      return mapParticipant(row);
     },
 
-    listParticipants(conversationId: string): ConversationParticipant[] {
-      requireConversation(db, conversationId);
+    removeParticipant(conversationId: string, personId: string, skillId: string) {
+      const result = db
+        .prepare("delete from conversation_participants where conversation_id = ? and person_id = ? and skill_id = ?")
+        .run(conversationId, personId, skillId);
+
+      if (result.changes === 0) {
+        throw new Error("Conversation participant not found");
+      }
+    },
+
+    listParticipants(conversationId: string) {
       const rows = db
-        .prepare(
-          `select * from conversation_participants
-           where conversation_id = ? and is_active = 1
-           order by position asc, person_id asc, skill_id asc`
-        )
+        .prepare("select * from conversation_participants where conversation_id = ? order by position asc, person_id asc")
         .all(conversationId) as ParticipantRow[];
 
       return rows.map(mapParticipant);
     },
 
-    removeParticipant(conversationId: string, personId: string, skillId: string) {
-      requireConversation(db, conversationId);
-      db.prepare(
-        `delete from conversation_participants
-         where conversation_id = ? and person_id = ? and skill_id = ?`
-      ).run(conversationId, personId, skillId);
-      touchConversation(db, conversationId);
-    },
-
-    createMessage(input: CreateMessageInput): Message {
-      requireConversation(db, input.conversationId);
-
-      if (input.replyToMessageId) {
-        const replyRow = db
-          .prepare("select id from messages where id = ? and conversation_id = ?")
-          .get(input.replyToMessageId, input.conversationId) as { id: string } | undefined;
-
-        if (!replyRow) {
-          throw new Error("Reply target not found in conversation");
-        }
+    createMessage(input: CreateMessageInput) {
+      if (!getConversationRow(db, input.conversationId)) {
+        throw new Error("Conversation not found");
       }
 
       const id = nanoid();
+      const senderType = input.senderType ?? "user";
+      const senderId = input.senderId ?? "user";
+      const roundIndex = getNextRoundIndex(db, input.conversationId, senderType, input.replyToMessageId);
       const createdAt = now();
-      const roundIndex = input.roundIndex ?? inferRoundIndex(db, input.conversationId);
 
       db.prepare(
         `insert into messages (
@@ -236,8 +238,8 @@ export function createConversationService(db: Database.Database) {
       ).run(
         id,
         input.conversationId,
-        input.senderType,
-        input.senderId,
+        senderType,
+        senderId,
         input.content,
         roundIndex,
         input.replyToMessageId ?? null,
@@ -245,22 +247,25 @@ export function createConversationService(db: Database.Database) {
         createdAt
       );
 
-      touchConversation(db, input.conversationId);
-
-      return mapMessage(db.prepare("select * from messages where id = ?").get(id) as MessageRow);
+      return mapMessage(getMessageRow(db, id) as MessageRow);
     },
 
-    listMessages(conversationId: string): Message[] {
-      requireConversation(db, conversationId);
+    listMessages(conversationId: string) {
       const rows = db
-        .prepare(
-          `select * from messages
-           where conversation_id = ?
-           order by round_index asc, created_at asc, id asc`
-        )
+        .prepare("select * from messages where conversation_id = ? order by round_index asc, rowid asc")
         .all(conversationId) as MessageRow[];
 
       return rows.map(mapMessage);
+    },
+
+    getMessage(messageId: string) {
+      const row = getMessageRow(db, messageId);
+      return row ? mapMessage(row) : null;
+    },
+
+    messageBelongsToConversation(conversationId: string, messageId: string) {
+      const row = getMessageRow(db, messageId);
+      return row ? row.conversation_id === conversationId : false;
     }
   };
 }

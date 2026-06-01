@@ -18,11 +18,11 @@ routes/evaluationRoutes.ts: 评审与 critique 路由，提供 POST /api/evaluat
 routes/healthRoutes.ts: 健康检查路由，提供 GET /api/health
 routes/libraryRoutes.ts: 资料库路由，提供 people 与 fragments HTTP 入口
 routes/researchRoutes.ts: 研究采集路由，提供 POST /api/research/crawl 入口与 Zod 输入校验
-routes/skillRoutes.ts: 技能蒸馏路由，提供 POST /api/skills/distill 入口与 Zod 输入校验
+routes/skillRoutes.ts: 技能蒸馏路由，提供 POST /api/skills/distill 与 /api/skills/distill/jobs 入口及 Zod 输入校验
 services/: 后端服务模块，承载业务 SQL 与领域数据映射
 services/conversationRunService.ts: 会话运行服务，封装 direct/group run 的回复生成、状态迁移与 stop 行为
 services/conversationService.ts: 会话服务，封装 conversations/conversation_participants/messages 的 CRUD 与 schema 映射
-services/distillationService.ts: 会话蒸馏 stub seam，集中提供可替换的 persona reply 生成入口
+services/distillationService.ts: 蒸馏任务 stub seam，负责 distill job 入队并为后续 nuwa CLI 接入保留稳定边界
 services/evaluationService.ts: 项目评审服务，封装评审输出、风险问题与 critique 落库
 services/libraryService.ts: 资料库服务，封装 people/sources/fragments 的 SQLite 读写与 shared schema 映射
 services/nuwaGatewayService.ts: nuwa-skill 网关服务，解析 README 已蒸馏人物并输出可导入 persona 行

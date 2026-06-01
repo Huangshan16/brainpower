@@ -32,23 +32,25 @@ type AppOptions = {
   nuwaGateway?: {
     fetchReadme?: () => Promise<string>;
   };
+  model?: ReturnType<typeof createModelService>;
 };
 
-export function createApp({ db, nuwaGateway: nuwaGatewayOptions }: AppOptions) {
+export function createApp({ db, nuwaGateway: nuwaGatewayOptions, model: modelOverride }: AppOptions) {
   const app = express();
   const appLogger = createLogger("app");
   const library = createLibraryService(db);
   const conversations = createConversationService(db);
-  const distillation = createDistillationService(db);
-  const conversationRuns = createConversationRunService({ db, conversations, distillation });
   const personaLibrary = createPersonaLibraryService(db);
-  const model = createModelService({
-    baseUrl: config.modelBaseUrl,
-    apiKey: config.modelApiKey,
-    modelName: config.modelName,
-    logger: createLogger("modelService"),
-    timeoutMs: config.modelTimeoutMs
-  });
+  const model =
+    modelOverride ??
+    createModelService({
+      baseUrl: config.modelBaseUrl,
+      apiKey: config.modelApiKey,
+      modelName: config.modelName,
+      logger: createLogger("modelService"),
+      timeoutMs: config.modelTimeoutMs
+    });
+  const conversationRuns = createConversationRunService({ db, conversations, model });
   const research = createResearchService({
     db,
     library,
@@ -62,6 +64,7 @@ export function createApp({ db, nuwaGateway: nuwaGatewayOptions }: AppOptions) {
     }
   });
   const nuwaGateway = createNuwaGatewayService(nuwaGatewayOptions);
+  const distillation = createDistillationService({ db, library: personaLibrary, gateway: nuwaGateway, conversations });
   const skillService = createSkillService({ db, library, model });
   const evaluationService = createEvaluationService({ db, logger: createLogger("evaluationService"), model });
 
@@ -72,7 +75,7 @@ export function createApp({ db, nuwaGateway: nuwaGatewayOptions }: AppOptions) {
   app.use("/api", createConversationRoutes(conversations, conversationRuns));
   app.use("/api", createPersonaRoutes(personaLibrary, nuwaGateway));
   app.use("/api", createResearchRoutes(research));
-  app.use("/api", createSkillRoutes(skillService));
+  app.use("/api", createSkillRoutes(skillService, distillation));
   app.use("/api", createEvaluationRoutes(evaluationService));
   appLogger.info("app_routes_ready", {
     routes: [
@@ -83,6 +86,7 @@ export function createApp({ db, nuwaGateway: nuwaGatewayOptions }: AppOptions) {
       "/api/personas/import/nuwa",
       "/api/research/crawl",
       "/api/skills/distill",
+      "/api/skills/distill/jobs",
       "/api/evaluations"
     ]
   });

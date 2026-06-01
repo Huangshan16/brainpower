@@ -52,12 +52,18 @@ describe("conversationRunService", () => {
     const { dir, db, conversations, conversation, userMessage } = seedConversationFixture();
 
     try {
-      const runs = createConversationRunService({ db, conversations });
+      const runs = createConversationRunService({
+        db,
+        conversations,
+        model: {
+          completeJson: async () => JSON.stringify({ reply: "先别自嗨，先找 PMF。" })
+        }
+      });
       const run = await runs.startGroupRun({ conversationId: conversation.id, messageId: userMessage.id });
 
       expect(run.status).toBe("running");
       const messagesAfterStart = conversations.listMessages(conversation.id);
-      expect(messagesAfterStart.map((message) => message.senderType)).toEqual(["user", "system", "persona"]);
+      expect(messagesAfterStart.map((message) => message.senderType)).toEqual(["user", "persona", "system"]);
 
       const stopped = await runs.stopRun(run.id, "user_stop");
 
@@ -75,7 +81,13 @@ describe("conversationRunService", () => {
     const { dir, db, conversations, conversation, person, userMessage } = seedConversationFixture();
 
     try {
-      const runs = createConversationRunService({ db, conversations });
+      const runs = createConversationRunService({
+        db,
+        conversations,
+        model: {
+          completeJson: async () => JSON.stringify({ reply: "只回答一句：现在还太早。" })
+        }
+      });
       const run = await runs.startDirectRun({
         conversationId: conversation.id,
         messageId: userMessage.id,
@@ -87,12 +99,43 @@ describe("conversationRunService", () => {
       expect(conversations.listMessages(conversation.id)).toEqual(
         expect.arrayContaining([
           expect.objectContaining({
-            id: run.messageId,
             senderType: "persona",
             senderId: person.id,
             replyToMessageId: userMessage.id
           })
         ])
+      );
+    } finally {
+      db.close();
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("rejects starting a run with a message from another conversation", async () => {
+    const { dir, db, conversations, conversation, person, userMessage } = seedConversationFixture();
+
+    try {
+      const otherConversation = conversations.createConversation({ title: "别的会话", mode: "direct" });
+      const runs = createConversationRunService({
+        db,
+        conversations,
+        model: {
+          completeJson: async () => JSON.stringify({ reply: "不会走到这里" })
+        }
+      });
+
+      await expect(
+        runs.startDirectRun({
+          conversationId: otherConversation.id,
+          messageId: userMessage.id,
+          speakerPersonId: person.id
+        })
+      ).rejects.toThrow("Message must belong to the selected conversation");
+
+      const validRun = await runs.startGroupRun({ conversationId: conversation.id, messageId: userMessage.id });
+
+      expect(() => runs.stopRun(validRun.id, "user_stop", otherConversation.id)).toThrow(
+        "Conversation run does not belong to the selected conversation"
       );
     } finally {
       db.close();

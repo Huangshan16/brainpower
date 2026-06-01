@@ -87,7 +87,6 @@ describe("conversationService", () => {
         senderId: "orchestrator",
         content: "收到，进入直接对话。",
         replyToMessageId: userMessage.id,
-        roundIndex: userMessage.roundIndex,
         meta: { mode: "direct" }
       });
 
@@ -106,6 +105,35 @@ describe("conversationService", () => {
           meta: { mode: "direct" }
         })
       ]);
+    } finally {
+      db.close();
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("rejects reply targets from another conversation", () => {
+    const { dir, db } = seedPersonWithSkill();
+
+    try {
+      const service = createConversationService(db);
+      const conversationA = service.createConversation({ title: "A", mode: "direct" });
+      const conversationB = service.createConversation({ title: "B", mode: "direct" });
+      const foreignMessage = service.createMessage({
+        conversationId: conversationA.id,
+        senderType: "user",
+        senderId: "user-a",
+        content: "只属于 A"
+      });
+
+      expect(() =>
+        service.createMessage({
+          conversationId: conversationB.id,
+          senderType: "system",
+          senderId: "system",
+          content: "错误引用",
+          replyToMessageId: foreignMessage.id
+        })
+      ).toThrow("Reply target message must belong to the same conversation");
     } finally {
       db.close();
       rmSync(dir, { recursive: true, force: true });

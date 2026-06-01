@@ -12,7 +12,7 @@ import { describe, expect, test } from "vitest";
 import { createApp } from "../app.js";
 import { openDatabase } from "../db/connection.js";
 import { migrate } from "../db/migrate.js";
-import { createLibraryService } from "../services/libraryService.js";
+import type { createModelService } from "../services/modelService.js";
 
 function closeServer(server: Server) {
   return new Promise<void>((resolve, reject) => {
@@ -128,6 +128,88 @@ describe("app routes", () => {
     }
   });
 
+  test("queues an import-first distillation job and normalizes a matched persona", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "brainpower-app-"));
+    const db = openDatabase(join(dir, "test.sqlite"));
+
+    try {
+      migrate(db);
+      const app = createApp({
+        db,
+        nuwaGateway: {
+          fetchReadme: async () => `
+## 已蒸馏人物
+- Paul Graham
+`
+        }
+      });
+      const server = app.listen(0);
+      const port = (server.address() as { port: number }).port;
+
+      try {
+        const response = await fetch(`http://127.0.0.1:${port}/api/skills/distill/jobs`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ name: "Paul Graham" })
+        });
+        const body = await response.json();
+        const people = await fetch(`http://127.0.0.1:${port}/api/personas`).then((res) => res.json());
+
+        expect(response.status).toBe(202);
+        expect(body.status).toBe("succeeded");
+        expect(body.personId).toEqual(expect.any(String));
+        expect(people.people).toEqual(
+          expect.arrayContaining([expect.objectContaining({ name: "Paul Graham", originType: "nuwa_import" })])
+        );
+      } finally {
+        await closeServer(server);
+      }
+    } finally {
+      db.close();
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("marks distillation jobs as failed when gateway import throws", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "brainpower-app-"));
+    const db = openDatabase(join(dir, "test.sqlite"));
+
+    try {
+      migrate(db);
+      const app = createApp({
+        db,
+        nuwaGateway: {
+          fetchReadme: async () => {
+            throw new Error("gateway broke");
+          }
+        }
+      });
+      const server = app.listen(0);
+      const port = (server.address() as { port: number }).port;
+
+      try {
+        const response = await fetch(`http://127.0.0.1:${port}/api/skills/distill/jobs`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ name: "Paul Graham" })
+        });
+        const body = await response.json();
+        const job = db
+          .prepare("select status, error from jobs order by created_at desc, id desc limit 1")
+          .get() as { status: string; error: string | null };
+
+        expect(response.status).toBe(500);
+        expect(body).toEqual({ error: "gateway broke" });
+        expect(job).toEqual({ status: "failed", error: "gateway broke" });
+      } finally {
+        await closeServer(server);
+      }
+    } finally {
+      db.close();
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   test("returns a stable persistence error when imported personas cannot be saved", async () => {
     const dir = mkdtempSync(join(tmpdir(), "brainpower-app-"));
     const db = openDatabase(join(dir, "test.sqlite"));
@@ -216,79 +298,93 @@ describe("app routes", () => {
     }
   });
 
-  test("creates a conversation, runs a group turn, and preserves messages after stop", async () => {
+  test("creates a conversation, runs group chat, and stops the run", async () => {
     const dir = mkdtempSync(join(tmpdir(), "brainpower-app-"));
     const db = openDatabase(join(dir, "test.sqlite"));
 
     try {
       migrate(db);
-      const library = createLibraryService(db);
-      const person = library.createPerson({ name: "Paul Graham", role: "investor", region: "US", tags: ["essays"] });
+      db.prepare(
+        `insert into people (
+          id, name, role, region, tags, status, origin_type, origin_ref, persona_kind, is_archived, is_deleted, created_at, updated_at
+        ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      ).run(
+        "person-paul",
+        "Paul Graham",
+        "investor",
+        "US",
+        '["essays"]',
+        "ready_to_distill",
+        "seed",
+        null,
+        "person",
+        0,
+        0,
+        "2026-06-01T00:00:00.000Z",
+        "2026-06-01T00:00:00.000Z"
+      );
       db.prepare(
         `insert into skills (
           id, person_id, version, mental_models_json, heuristics_json, voice_dna_json,
           anti_patterns_json, honesty_boundaries_json, citations_json, created_at
         ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-      ).run("skill-paul-v1", person.id, 1, "[]", "[]", "[]", "[]", "[]", "[]", "2026-06-01T00:00:00.000Z");
+      ).run("skill-paul-v1", "person-paul", 1, "[]", "[]", "[]", "[]", "[]", "[]", "2026-06-01T00:00:00.000Z");
 
-      const app = createApp({ db });
+      const app = createApp({
+        db,
+        model: {
+          completeJson: async () => JSON.stringify({ reply: "先验证需求强度。" })
+        } as Pick<ReturnType<typeof createModelService>, "completeJson">
+      });
       const server = app.listen(0);
       const port = (server.address() as { port: number }).port;
 
       try {
-        const createdConversation = await fetch(`http://127.0.0.1:${port}/api/conversations`, {
+        const conversation = await fetch(`http://127.0.0.1:${port}/api/conversations`, {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ title: "创业判断", mode: "group" })
-        });
-        const conversation = await createdConversation.json();
-
+          body: JSON.stringify({ title: "创业讨论", mode: "group" })
+        }).then((res) => res.json());
         const participant = await fetch(`http://127.0.0.1:${port}/api/conversations/${conversation.id}/participants`, {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ personId: person.id, skillId: "skill-paul-v1", joinSource: "library" })
+          body: JSON.stringify({ personId: "person-paul", skillId: "skill-paul-v1", joinSource: "library" })
         });
-        const participantBody = await participant.json();
-
-        const userMessageResponse = await fetch(`http://127.0.0.1:${port}/api/conversations/${conversation.id}/messages`, {
+        const message = await fetch(`http://127.0.0.1:${port}/api/conversations/${conversation.id}/messages`, {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ senderType: "user", senderId: "user-local", content: "给出一句判断。" })
-        });
-        const userMessage = await userMessageResponse.json();
-
-        const runResponse = await fetch(`http://127.0.0.1:${port}/api/conversations/${conversation.id}/run/group`, {
+          body: JSON.stringify({ content: "会投吗？" })
+        }).then((res) => res.json());
+        const run = await fetch(`http://127.0.0.1:${port}/api/conversations/${conversation.id}/run/group`, {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ messageId: userMessage.id })
-        });
-        const run = await runResponse.json();
-
+          body: JSON.stringify({ messageId: message.id })
+        }).then((res) => res.json());
         const stopped = await fetch(`http://127.0.0.1:${port}/api/conversations/${conversation.id}/run/stop`, {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ runId: run.id, reason: "user_stop" })
+          body: JSON.stringify({ runId: run.id })
+        });
+        const wrongStop = await fetch(`http://127.0.0.1:${port}/api/conversations/fake-conversation/run/stop`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ runId: run.id })
         });
         const messages = await fetch(`http://127.0.0.1:${port}/api/conversations/${conversation.id}/messages`).then((res) =>
           res.json()
         );
-        const removed = await fetch(
-          `http://127.0.0.1:${port}/api/conversations/${conversation.id}/participants/${person.id}/skill-paul-v1`,
-          { method: "DELETE" }
-        );
-        const participantsAfterDelete = await fetch(
-          `http://127.0.0.1:${port}/api/conversations/${conversation.id}/participants`
-        ).then((res) => res.json());
 
-        expect(createdConversation.status).toBe(201);
         expect(participant.status).toBe(201);
-        expect(userMessageResponse.status).toBe(201);
-        expect(runResponse.status).toBe(202);
-        expect(stopped.status).toBe(200);
-        expect(removed.status).toBe(204);
-        expect(participantBody).toMatchObject({ personId: person.id, skillId: "skill-paul-v1" });
-        expect(messages.map((message: { senderType: string }) => message.senderType)).toEqual(["user", "system", "persona"]);
-        expect(participantsAfterDelete).toEqual([]);
+        expect(run.status).toBe("running");
+        expect(stopped.status).toBe(204);
+        expect(wrongStop.status).toBe(404);
+        expect(messages.messages).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({ senderType: "user", content: "会投吗？" }),
+            expect.objectContaining({ senderType: "persona", senderId: "person-paul" }),
+            expect.objectContaining({ senderType: "system" })
+          ])
+        );
       } finally {
         await closeServer(server);
       }

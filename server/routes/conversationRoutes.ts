@@ -1,60 +1,60 @@
 /**
- * [INPUT]: 依赖 express Router、zod 输入验证、conversationService 与 conversationRunService
+ * [INPUT]: 依赖 express、zod、conversationService 与 conversationRunService 处理会话 HTTP 请求
  * [OUTPUT]: 对外提供 createConversationRoutes 路由工厂
- * [POS]: server/routes 的会话 HTTP 边界，被 app 装配到 /api 并把 run 控制维持在薄路由
+ * [POS]: server/routes 的对话 HTTP 边界，被 app 装配到 /api
  * [PROTOCOL]: 变更时更新此头部，然后检查 AGENTS.md
  */
 import { Router } from "express";
 import { z } from "zod";
-import type { createConversationRunService } from "../services/conversationRunService.js";
 import type { createConversationService } from "../services/conversationService.js";
+import type { createConversationRunService } from "../services/conversationRunService.js";
 
 type ConversationService = ReturnType<typeof createConversationService>;
 type ConversationRunService = ReturnType<typeof createConversationRunService>;
 
-const CreateConversationSchema = z.object({
+const CreateConversationInputSchema = z.object({
   title: z.string().min(1),
   mode: z.enum(["direct", "group"])
 });
 
-const AddParticipantSchema = z.object({
+const AddParticipantInputSchema = z.object({
   personId: z.string().min(1),
   skillId: z.string().min(1),
-  joinSource: z.string().min(1)
+  joinSource: z.string().min(1),
+  position: z.number().int().nonnegative().optional()
 });
 
-const CreateMessageSchema = z.object({
-  senderType: z.enum(["user", "persona", "system"]),
-  senderId: z.string().min(1),
+const CreateMessageInputSchema = z.object({
   content: z.string().min(1),
-  roundIndex: z.number().int().nonnegative().optional(),
+  senderType: z.enum(["user", "persona", "system"]).optional(),
+  senderId: z.string().min(1).optional(),
   replyToMessageId: z.string().min(1).nullable().optional(),
-  meta: z.record(z.any()).optional()
+  meta: z.record(z.unknown()).optional()
 });
 
-const StartDirectRunSchema = z.object({
+const DirectRunInputSchema = z.object({
   messageId: z.string().min(1),
   speakerPersonId: z.string().min(1)
 });
 
-const StartGroupRunSchema = z.object({
+const GroupRunInputSchema = z.object({
   messageId: z.string().min(1)
 });
 
-const StopRunSchema = z.object({
+const StopRunInputSchema = z.object({
   runId: z.string().min(1),
-  reason: z.string().min(1)
+  reason: z.string().min(1).optional()
 });
 
 export function createConversationRoutes(conversations: ConversationService, runs: ConversationRunService) {
   const router = Router();
 
   router.get("/conversations", (_req, res) => {
-    res.json(conversations.listConversations());
+    res.json({ conversations: conversations.listConversations() });
   });
 
   router.post("/conversations", (req, res) => {
-    const input = CreateConversationSchema.safeParse(req.body);
+    const input = CreateConversationInputSchema.safeParse(req.body);
 
     if (!input.success) {
       res.status(400).json({ error: "Invalid conversation payload" });
@@ -65,18 +65,14 @@ export function createConversationRoutes(conversations: ConversationService, run
   });
 
   router.get("/conversations/:conversationId/participants", (req, res) => {
-    try {
-      res.json(conversations.listParticipants(req.params.conversationId));
-    } catch (error) {
-      res.status(404).json({ error: error instanceof Error ? error.message : "Conversation not found" });
-    }
+    res.json({ participants: conversations.listParticipants(req.params.conversationId) });
   });
 
   router.post("/conversations/:conversationId/participants", (req, res) => {
-    const input = AddParticipantSchema.safeParse(req.body);
+    const input = AddParticipantInputSchema.safeParse(req.body);
 
     if (!input.success) {
-      res.status(400).json({ error: "Invalid participant payload" });
+      res.status(400).json({ error: "Invalid conversation participant payload" });
       return;
     }
 
@@ -84,38 +80,32 @@ export function createConversationRoutes(conversations: ConversationService, run
       res.status(201).json(
         conversations.addParticipant({
           conversationId: req.params.conversationId,
-          personId: input.data.personId,
-          skillId: input.data.skillId,
-          joinSource: input.data.joinSource
+          ...input.data
         })
       );
     } catch (error) {
-      res.status(500).json({ error: error instanceof Error ? error.message : "Failed to add participant" });
+      res.status(400).json({ error: error instanceof Error ? error.message : "Failed to add participant" });
     }
   });
 
   router.delete("/conversations/:conversationId/participants/:personId/:skillId", (req, res) => {
     try {
       conversations.removeParticipant(req.params.conversationId, req.params.personId, req.params.skillId);
-      res.status(204).end();
-    } catch (error) {
-      res.status(404).json({ error: error instanceof Error ? error.message : "Conversation not found" });
+      res.status(204).send();
+    } catch {
+      res.status(404).json({ error: "Conversation participant not found" });
     }
   });
 
   router.get("/conversations/:conversationId/messages", (req, res) => {
-    try {
-      res.json(conversations.listMessages(req.params.conversationId));
-    } catch (error) {
-      res.status(404).json({ error: error instanceof Error ? error.message : "Conversation not found" });
-    }
+    res.json({ messages: conversations.listMessages(req.params.conversationId) });
   });
 
   router.post("/conversations/:conversationId/messages", (req, res) => {
-    const input = CreateMessageSchema.safeParse(req.body);
+    const input = CreateMessageInputSchema.safeParse(req.body);
 
     if (!input.success) {
-      res.status(400).json({ error: "Invalid message payload" });
+      res.status(400).json({ error: "Invalid conversation message payload" });
       return;
     }
 
@@ -127,12 +117,12 @@ export function createConversationRoutes(conversations: ConversationService, run
         })
       );
     } catch (error) {
-      res.status(500).json({ error: error instanceof Error ? error.message : "Failed to create message" });
+      res.status(400).json({ error: error instanceof Error ? error.message : "Failed to create message" });
     }
   });
 
   router.post("/conversations/:conversationId/run/direct", async (req, res) => {
-    const input = StartDirectRunSchema.safeParse(req.body);
+    const input = DirectRunInputSchema.safeParse(req.body);
 
     if (!input.success) {
       res.status(400).json({ error: "Invalid direct run payload" });
@@ -140,20 +130,14 @@ export function createConversationRoutes(conversations: ConversationService, run
     }
 
     try {
-      res.status(202).json(
-        await runs.startDirectRun({
-          conversationId: req.params.conversationId,
-          messageId: input.data.messageId,
-          speakerPersonId: input.data.speakerPersonId
-        })
-      );
+      res.status(202).json(await runs.startDirectRun({ conversationId: req.params.conversationId, ...input.data }));
     } catch (error) {
-      res.status(500).json({ error: error instanceof Error ? error.message : "Failed to start direct run" });
+      res.status(400).json({ error: error instanceof Error ? error.message : "Failed to start direct run" });
     }
   });
 
   router.post("/conversations/:conversationId/run/group", async (req, res) => {
-    const input = StartGroupRunSchema.safeParse(req.body);
+    const input = GroupRunInputSchema.safeParse(req.body);
 
     if (!input.success) {
       res.status(400).json({ error: "Invalid group run payload" });
@@ -161,19 +145,14 @@ export function createConversationRoutes(conversations: ConversationService, run
     }
 
     try {
-      res.status(202).json(
-        await runs.startGroupRun({
-          conversationId: req.params.conversationId,
-          messageId: input.data.messageId
-        })
-      );
+      res.status(202).json(await runs.startGroupRun({ conversationId: req.params.conversationId, ...input.data }));
     } catch (error) {
-      res.status(500).json({ error: error instanceof Error ? error.message : "Failed to start group run" });
+      res.status(400).json({ error: error instanceof Error ? error.message : "Failed to start group run" });
     }
   });
 
-  router.post("/conversations/:conversationId/run/stop", async (req, res) => {
-    const input = StopRunSchema.safeParse(req.body);
+  router.post("/conversations/:conversationId/run/stop", (req, res) => {
+    const input = StopRunInputSchema.safeParse(req.body);
 
     if (!input.success) {
       res.status(400).json({ error: "Invalid stop run payload" });
@@ -181,29 +160,8 @@ export function createConversationRoutes(conversations: ConversationService, run
     }
 
     try {
-      const run = runs.getRun(input.data.runId);
-
-      if (run.conversationId !== req.params.conversationId) {
-        res.status(404).json({ error: "Conversation run not found" });
-        return;
-      }
-
-      res.json(await runs.stopRun(input.data.runId, input.data.reason));
-    } catch (error) {
-      res.status(404).json({ error: error instanceof Error ? error.message : "Conversation run not found" });
-    }
-  });
-
-  router.get("/conversations/:conversationId/runs/:runId", (req, res) => {
-    try {
-      const run = runs.getRun(req.params.runId);
-
-      if (run.conversationId !== req.params.conversationId) {
-        res.status(404).json({ error: "Conversation run not found" });
-        return;
-      }
-
-      res.json(run);
+      runs.stopRun(input.data.runId, input.data.reason ?? "user_stop", req.params.conversationId);
+      res.status(204).send();
     } catch (error) {
       res.status(404).json({ error: error instanceof Error ? error.message : "Conversation run not found" });
     }
