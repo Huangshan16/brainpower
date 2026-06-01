@@ -11,5 +11,6 @@ export const config = {
   databasePath: process.env.DATABASE_PATH ?? "data/brainpower.sqlite",
   modelBaseUrl: process.env.MODEL_BASE_URL ?? "https://api.openai.com/v1",
   modelApiKey: process.env.MODEL_API_KEY ?? "",
-  modelName: process.env.MODEL_NAME ?? "gpt-4.1-mini"
+  modelName: process.env.MODEL_NAME ?? "gpt-4.1-mini",
+  modelTimeoutMs: Number(process.env.MODEL_TIMEOUT_MS ?? 30000)
 };

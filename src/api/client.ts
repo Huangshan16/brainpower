@@ -18,7 +18,19 @@ async function postJson(path: string, body: unknown) {
   });
 
   if (!response.ok) {
-    throw new Error(`Request failed: ${response.status}`);
+    let message = `Request failed: ${response.status}`;
+
+    try {
+      const payload = (await response.json()) as { error?: string };
+
+      if (payload.error) {
+        message = payload.error;
+      }
+    } catch {
+      // Ignore non-JSON error bodies and keep the HTTP status message.
+    }
+
+    throw new Error(message);
   }
 
   return response.json();

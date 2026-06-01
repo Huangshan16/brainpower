@@ -17,6 +17,7 @@ export function EvaluateWorkspace({
   const [title, setTitle] = useState("AI founder cognition OS");
   const [brief, setBrief] = useState("A research console that compresses investor and operator judgment into a digital mentor matrix.");
   const [status, setStatus] = useState("Evaluation lane is primed for a first pass.");
+  const [isRunning, setIsRunning] = useState(false);
 
   async function handleRunMatrix() {
     if (!api) {
@@ -24,8 +25,17 @@ export function EvaluateWorkspace({
       return;
     }
 
-    await api.evaluateProject({ project: { title, brief }, personId, skillId: `${personId}-v1` });
-    setStatus("Matrix evaluation stored.");
+    setIsRunning(true);
+    setStatus("Running matrix evaluation...");
+
+    try {
+      await api.evaluateProject({ project: { title, brief }, personId, skillId: `${personId}-v1` });
+      setStatus("Matrix evaluation stored.");
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "Evaluation failed.");
+    } finally {
+      setIsRunning(false);
+    }
   }
 
   return (
@@ -42,8 +52,8 @@ export function EvaluateWorkspace({
         Brief
         <textarea onChange={(event) => setBrief(event.target.value)} rows={6} value={brief} />
       </label>
-      <button onClick={() => void handleRunMatrix()} type="button">
-        Run matrix
+      <button disabled={isRunning} onClick={() => void handleRunMatrix()} type="button">
+        {isRunning ? "Running..." : "Run matrix"}
       </button>
       <p className="workspace-note">{status}</p>
     </section>

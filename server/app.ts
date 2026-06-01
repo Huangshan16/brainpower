@@ -29,7 +29,8 @@ export function createApp({ db }: AppOptions) {
   const model = createModelService({
     baseUrl: config.modelBaseUrl,
     apiKey: config.modelApiKey,
-    modelName: config.modelName
+    modelName: config.modelName,
+    timeoutMs: config.modelTimeoutMs
   });
   const research = createResearchService({
     db,

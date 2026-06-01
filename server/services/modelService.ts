@@ -12,8 +12,16 @@ type ModelServiceOptions = {
   baseUrl: string;
   apiKey: string;
   modelName: string;
+  timeoutMs?: number;
   fetchJson?: FetchJson;
 };
+
+function normalizeJsonEnvelope(content: string) {
+  const trimmed = content.trim();
+  const fenced = trimmed.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/i);
+
+  return fenced ? fenced[1].trim() : trimmed;
+}
 
 const defaultFetchJson: FetchJson = async (url, init) => {
   const response = await fetch(url, init);
@@ -25,7 +33,14 @@ const defaultFetchJson: FetchJson = async (url, init) => {
   return (await response.json()) as Awaited<ReturnType<FetchJson>>;
 };
 
-export function createModelService({ baseUrl, apiKey, modelName, fetchJson = defaultFetchJson }: ModelServiceOptions) {
+export function createModelService({
+  baseUrl,
+  apiKey,
+  modelName,
+  timeoutMs = 30_000,
+  fetchJson = defaultFetchJson
+}: ModelServiceOptions) {
+
   return {
     async completeJson(systemPrompt: string, userPrompt: string) {
       const payload = {
@@ -37,14 +52,19 @@ export function createModelService({ baseUrl, apiKey, modelName, fetchJson = def
         response_format: { type: "json_object" }
       };
 
-      const result = await fetchJson(`${baseUrl}/chat/completions`, {
-        method: "POST",
-        headers: {
-          authorization: `Bearer ${apiKey}`,
-          "content-type": "application/json"
-        },
-        body: JSON.stringify(payload)
-      });
+      const result = await Promise.race([
+        fetchJson(`${baseUrl}/chat/completions`, {
+          method: "POST",
+          headers: {
+            authorization: `Bearer ${apiKey}`,
+            "content-type": "application/json"
+          },
+          body: JSON.stringify(payload)
+        }),
+        new Promise<never>((_, reject) => {
+          setTimeout(() => reject(new Error(`Model request timed out after ${timeoutMs}ms`)), timeoutMs);
+        })
+      ]);
 
       const content = result.choices?.[0]?.message?.content;
 
@@ -52,7 +72,7 @@ export function createModelService({ baseUrl, apiKey, modelName, fetchJson = def
         throw new Error("Model response did not contain message content");
       }
 
-      return content;
+      return normalizeJsonEnvelope(content);
     }
   };
 }

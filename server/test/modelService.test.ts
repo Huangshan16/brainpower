@@ -26,4 +26,31 @@ describe("modelService", () => {
     expect(text).toBe("{\"verdict\":\"pass\"}");
     expect(requests).toHaveLength(1);
   });
+
+  test("strips fenced markdown wrappers from model JSON responses", async () => {
+    const model = createModelService({
+      baseUrl: "https://models.example/v1",
+      apiKey: "secret",
+      modelName: "test-model",
+      fetchJson: async () => ({
+        choices: [{ message: { content: "```json\n{\"verdict\":\"invest\"}\n```" } }]
+      })
+    });
+
+    const text = await model.completeJson("system", "user");
+
+    expect(text).toBe("{\"verdict\":\"invest\"}");
+  });
+
+  test("fails with a clear timeout error when provider does not respond in time", async () => {
+    const model = createModelService({
+      baseUrl: "https://models.example/v1",
+      apiKey: "secret",
+      modelName: "test-model",
+      timeoutMs: 10,
+      fetchJson: async () => new Promise(() => {})
+    });
+
+    await expect(model.completeJson("system", "user")).rejects.toThrow(/timed out after 10ms/i);
+  });
 });
