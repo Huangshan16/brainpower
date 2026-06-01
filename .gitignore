@@ -5,3 +5,5 @@ data/
 .DS_Store
 .superpowers/
 coverage/
+playwright-report/
+test-results/
