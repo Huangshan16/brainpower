@@ -1,6 +1,6 @@
 /**
  * [INPUT]: 依赖 vitest 与 modelService 验证 OpenAI 兼容 chat/completions 请求构造
- * [OUTPUT]: 对外提供模型服务 JSON 完成接口测试
+ * [OUTPUT]: 对外提供模型服务 JSON/文本完成接口测试
  * [POS]: server/test 的模型服务测试，约束 provider 调用契约
  * [PROTOCOL]: 变更时更新此头部，然后检查 AGENTS.md
  */
@@ -52,5 +52,23 @@ describe("modelService", () => {
     });
 
     await expect(model.completeJson("system", "user")).rejects.toThrow(/timed out after 10ms/i);
+  });
+
+  test("returns plain text responses without forcing a JSON envelope", async () => {
+    const requests: Array<Record<string, unknown>> = [];
+    const model = createModelService({
+      baseUrl: "https://models.example/v1",
+      apiKey: "secret",
+      modelName: "test-model",
+      fetchJson: async (_url: string, init: RequestInit) => {
+        requests.push(JSON.parse(init.body as string) as Record<string, unknown>);
+        return { choices: [{ message: { content: "直接给结论。" } }] };
+      }
+    });
+
+    const text = await model.completeText("system", "user");
+
+    expect(text).toBe("直接给结论。");
+    expect(requests[0].response_format).toBeUndefined();
   });
 });

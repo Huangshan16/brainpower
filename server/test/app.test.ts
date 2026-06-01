@@ -348,8 +348,9 @@ describe("app routes", () => {
       const app = createApp({
         db,
         model: {
-          completeJson: async () => JSON.stringify({ reply: "先验证需求强度。" })
-        } as Pick<ReturnType<typeof createModelService>, "completeJson">
+          completeJson: async () => JSON.stringify({ reply: "先验证需求强度。" }),
+          completeText: async () => "先验证需求强度。"
+        } as Pick<ReturnType<typeof createModelService>, "completeJson" | "completeText">
       });
       const server = app.listen(0);
       const port = (server.address() as { port: number }).port;

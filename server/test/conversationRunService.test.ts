@@ -85,12 +85,12 @@ describe("conversationRunService", () => {
         db,
         conversations,
         model: {
-          completeJson: async () => {
+          completeText: async () => {
             await new Promise((resolve) => {
               setTimeout(resolve, 40);
             });
 
-            return JSON.stringify({ reply: "先别自嗨，先找 PMF。" });
+            return "先别自嗨，先找 PMF。";
           }
         },
         maxRounds: 3,
@@ -124,7 +124,7 @@ describe("conversationRunService", () => {
         db,
         conversations,
         model: {
-          completeJson: async () => JSON.stringify({ reply: "只回答一句：现在还太早。" })
+          completeText: async () => "只回答一句：现在还太早。"
         }
       });
       const run = await runs.startDirectRun({
@@ -171,7 +171,7 @@ describe("conversationRunService", () => {
         db,
         conversations,
         model: {
-          completeJson: async (_systemPrompt: string, userPrompt: string) => JSON.stringify({ reply: `回应:${userPrompt.slice(0, 18)}` })
+          completeText: async (_systemPrompt: string, userPrompt: string) => `回应:${userPrompt.slice(0, 18)}`
         },
         maxRounds: 2,
         roundDelayMs: 0
@@ -202,7 +202,7 @@ describe("conversationRunService", () => {
         db,
         conversations,
         model: {
-          completeJson: async () => JSON.stringify({ reply: "不会走到这里" })
+          completeText: async () => "不会走到这里"
         }
       });
 

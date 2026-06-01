@@ -20,6 +20,7 @@ describe("evaluationService", () => {
     try {
       migrate(db);
       const model = {
+        completeText: async () => "unused",
         completeJson: async () =>
           JSON.stringify({
             verdict: "pass",
@@ -64,6 +65,7 @@ describe("evaluationService", () => {
     try {
       migrate(db);
       const model = {
+        completeText: async () => "unused",
         completeJson: async () =>
           JSON.stringify({
             verdict: "pass",
@@ -107,6 +109,7 @@ describe("evaluationService", () => {
     try {
       migrate(db);
       const model = {
+        completeText: async () => "unused",
         completeJson: async (systemPrompt: string) => {
           prompts.push(systemPrompt);
 

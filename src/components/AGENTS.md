@@ -5,7 +5,7 @@
 成员清单
 Composer.tsx: 对话输入器组件，提供消息草稿、发送、单聊与群聊动作按钮及禁用态
 ConversationHeader.tsx: 对话头部组件，展示标题、direct/group 完成态与终止群聊入口
-ConversationWorkspace.tsx: 对话工作区组件，编排会话创建、参与者同步、消息流轮询与 run 控制
+ConversationWorkspace.tsx: 对话工作区组件，编排会话创建、参与者同步、显式 run polling、消息流刷新与 run 控制
 DistillWorkspace.tsx: Distill 工作区组件，展示中文化 evidence count、Skill 结构与蒸馏入口
 EvidencePanel.tsx: 右侧证据与输出面板，展示资料片段、Skill 引用、对话摘要、群聊链路与单人物切换下拉
 JobPanel.tsx: 对话任务摘要组件，呈现导入/蒸馏/运行状态的简短说明

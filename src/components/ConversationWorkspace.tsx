@@ -4,7 +4,7 @@
  * [POS]: src/components 的对话主工作区，被 App 消费
  * [PROTOCOL]: 变更时更新此头部，然后检查 AGENTS.md
  */
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { ApiClient } from "../api/client";
 import { Composer } from "./Composer";
 import { ConversationHeader } from "./ConversationHeader";
@@ -57,6 +57,7 @@ export function ConversationWorkspace({
   const [runId, setRunId] = useState<string | null>(null);
   const [jobNote, setJobNote] = useState("已连接对话工作台。下一步是添加人物并发起第一条消息。");
   const [isBusy, setIsBusy] = useState(false);
+  const pollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const peopleById = useMemo(() => new Map(libraryPeople.map((person) => [person.id, person.name])), [libraryPeople]);
 
@@ -127,7 +128,7 @@ export function ConversationWorkspace({
 
   async function syncRunState(nextConversationId: string, nextRunId: string) {
     if (!api) {
-      return;
+      return "running";
     }
 
     const run = await api.getConversationRun({ conversationId: nextConversationId, runId: nextRunId });
@@ -140,21 +141,42 @@ export function ConversationWorkspace({
     if (status !== "running") {
       setRunId(null);
     }
+
+    return status;
   }
 
-  useEffect(() => {
-    if (!api || !conversationId || !runId || runState !== "group_running") {
-      return;
+  function stopRunPolling() {
+    if (pollTimerRef.current) {
+      clearTimeout(pollTimerRef.current);
+      pollTimerRef.current = null;
     }
+  }
 
-    const timer = setInterval(() => {
-      void Promise.all([syncMessages(conversationId), syncParticipants(conversationId), syncRunState(conversationId, runId)]);
-    }, 1200);
+  function startRunPolling(nextConversationId: string, nextRunId: string) {
+    stopRunPolling();
 
-    return () => {
-      clearInterval(timer);
+    const tick = async () => {
+      const results = await Promise.allSettled([
+        syncMessages(nextConversationId),
+        syncParticipants(nextConversationId),
+        syncRunState(nextConversationId, nextRunId)
+      ]);
+      const status = results[2].status === "fulfilled" ? results[2].value : "failed";
+
+      if (status === "running") {
+        pollTimerRef.current = setTimeout(() => {
+          void tick();
+        }, 1200);
+        return;
+      }
+
+      stopRunPolling();
     };
-  }, [api, conversationId, runId, runState]);
+
+    void tick();
+  }
+
+  useEffect(() => stopRunPolling, []);
 
   async function ensureParticipant(personId: string) {
     const existing = participants.find((participant) => participant.id === personId);
@@ -336,8 +358,10 @@ export function ConversationWorkspace({
       });
       await Promise.all([syncMessages(next.conversationId), syncParticipants(next.conversationId)]);
       setDraft("");
-      setRunId(String(run.id));
+      const nextRunId = String(run.id);
+      setRunId(nextRunId);
       setRunState("group_running");
+      startRunPolling(next.conversationId, nextRunId);
       setJobNote("群聊已拉起，人物会继续多轮交锋，直到你终止或自动完成。");
     } catch (error) {
       setJobNote(error instanceof Error ? error.message : "群聊启动失败。");
@@ -354,6 +378,7 @@ export function ConversationWorkspace({
     setIsBusy(true);
 
     try {
+      stopRunPolling();
       await api.stopGroupRun({ conversationId, runId });
       await Promise.all([syncMessages(conversationId), syncRunState(conversationId, runId)]);
       setJobNote("群聊已终止，但消息历史已保留。");

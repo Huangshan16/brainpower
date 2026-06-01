@@ -39,6 +39,7 @@ describe("skillService", () => {
         evidenceType: "thesis"
       });
       const model = {
+        completeText: async () => "unused",
         completeJson: async () =>
           JSON.stringify({
             mentalModels: ["seek monopoly"],

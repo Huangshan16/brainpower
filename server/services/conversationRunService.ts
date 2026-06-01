@@ -10,7 +10,7 @@ import { ConversationRunSchema, type ConversationRun } from "../../shared/schema
 import type { createModelService } from "./modelService.js";
 import type { createConversationService } from "./conversationService.js";
 
-type ModelService = ReturnType<typeof createModelService>;
+type ModelService = Pick<ReturnType<typeof createModelService>, "completeText">;
 type ConversationService = ReturnType<typeof createConversationService>;
 
 type ConversationRunRow = {
@@ -27,6 +27,11 @@ type ConversationRunRow = {
 
 type ReplyPayload = {
   reply: string;
+};
+
+type PersonaIdentity = {
+  id: string;
+  name: string;
 };
 
 function wait(ms: number) {
@@ -57,33 +62,50 @@ function getRunRow(db: Database.Database, runId: string) {
   return db.prepare("select * from conversation_runs where id = ?").get(runId) as ConversationRunRow | undefined;
 }
 
+function getPersonaIdentity(db: Database.Database, personId: string): PersonaIdentity {
+  const row = db.prepare("select id, name from people where id = ?").get(personId) as PersonaIdentity | undefined;
+  return row ?? { id: personId, name: personId };
+}
+
 async function generateReply(
   model: ModelService,
   input: {
     conversationId: string;
     personId: string;
+    personName: string;
     userMessage: string;
     mode: "direct" | "group";
   }
 ) {
-  const raw = await model.completeJson(
-    "Reply as the selected digital persona. Return JSON only with a single key: reply.",
+  const raw = await model.completeText(
+    `You are ${input.personName}. Reply only as ${input.personName}. Do not write lines for any other speaker. Return only the reply body in plain text with no JSON and no markdown fences.`,
     JSON.stringify(input)
   );
-  const parsed = JSON.parse(raw) as Partial<ReplyPayload>;
 
-  if (!parsed.reply) {
+  try {
+    const parsed = JSON.parse(raw) as Partial<ReplyPayload>;
+
+    if (parsed.reply) {
+      return parsed.reply;
+    }
+  } catch {
+    // 某些模型仍会返回接近 JSON 的文本，但聊天链路只需要最终可展示的正文。
+  }
+
+  const reply = raw.trim();
+
+  if (!reply) {
     throw new Error("Conversation reply payload missing reply");
   }
 
-  return parsed.reply;
+  return reply;
 }
 
 function buildGroupPrompt(conversations: ConversationService, conversationId: string, rootMessageId: string, round: number) {
   const recent = conversations
     .listMessages(conversationId)
     .slice(-6)
-    .map((message) => `${message.senderType}:${message.senderId}: ${message.content}`)
+    .map((message) => `${message.senderType}:${message.senderId}: ${message.content.slice(0, 600)}`)
     .join("\n");
 
   return round === 0 ? recent : `第 ${round + 1} 轮群聊，请基于最近消息继续回应、反驳或补充。\n${recent}\nroot:${rootMessageId}`;
@@ -141,22 +163,26 @@ export function createConversationRunService({
           return;
         }
 
-        for (const participant of participants) {
-          if (!isRunStillRunning(db, runId)) {
-            return;
-          }
+        const prompt = buildGroupPrompt(conversations, input.conversationId, input.messageId, round);
+        const identities = new Map(participants.map((participant) => [participant.personId, getPersonaIdentity(db, participant.personId)]));
+        const replies = await Promise.all(
+          participants.map(async (participant) => ({
+            participant,
+            reply: await generateReply(model, {
+              conversationId: input.conversationId,
+              personId: participant.personId,
+              personName: identities.get(participant.personId)?.name ?? participant.personId,
+              userMessage: prompt,
+              mode: "group"
+            })
+          }))
+        );
 
-          const reply = await generateReply(model, {
-            conversationId: input.conversationId,
-            personId: participant.personId,
-            userMessage: buildGroupPrompt(conversations, input.conversationId, input.messageId, round),
-            mode: "group"
-          });
+        if (!isRunStillRunning(db, runId)) {
+          return;
+        }
 
-          if (!isRunStillRunning(db, runId)) {
-            return;
-          }
-
+        for (const { participant, reply } of replies) {
           conversations.createMessage({
             conversationId: input.conversationId,
             senderType: "persona",
@@ -234,6 +260,7 @@ export function createConversationRunService({
       const reply = await generateReply(model, {
         conversationId: input.conversationId,
         personId: input.speakerPersonId,
+        personName: getPersonaIdentity(db, input.speakerPersonId).name,
         userMessage: sourceMessage.content,
         mode: "direct"
       });

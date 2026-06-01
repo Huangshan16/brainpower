@@ -1,6 +1,6 @@
 /**
  * [INPUT]: 依赖 OpenAI 兼容 chat/completions HTTP 接口与可注入 fetchJson 执行模型调用
- * [OUTPUT]: 对外提供 createModelService 工厂与 completeJson 方法
+ * [OUTPUT]: 对外提供 createModelService 工厂与 completeJson/completeText 方法
  * [POS]: server/services 的模型接入边界，被 skill/evaluation 服务消费
  * [PROTOCOL]: 变更时更新此头部，然后检查 AGENTS.md
  */
@@ -26,6 +26,17 @@ function normalizeJsonEnvelope(content: string) {
   return fenced ? fenced[1].trim() : trimmed;
 }
 
+function extractContent(result: Awaited<ReturnType<FetchJson>>, logger: Logger, context: LogDetails) {
+  const content = result.choices?.[0]?.message?.content;
+
+  if (!content) {
+    logger.error("model_response_missing_content", context);
+    throw new Error("Model response did not contain message content");
+  }
+
+  return content;
+}
+
 const defaultFetchJson: FetchJson = async (url, init) => {
   const response = await fetch(url, init);
 
@@ -44,6 +55,53 @@ export function createModelService({
   fetchJson = defaultFetchJson,
   logger = createLogger("modelService")
 }: ModelServiceOptions) {
+  async function requestModel(
+    payload: Record<string, unknown>,
+    input: { systemPrompt: string; userPrompt: string; context: LogDetails }
+  ) {
+    logger.info("model_request_started", {
+      ...input.context,
+      baseUrl,
+      modelName,
+      timeoutMs,
+      systemPromptPreview: input.systemPrompt,
+      userPromptPreview: input.userPrompt
+    });
+
+    try {
+      const result = await Promise.race([
+        fetchJson(`${baseUrl}/chat/completions`, {
+          method: "POST",
+          headers: {
+            authorization: `Bearer ${apiKey}`,
+            "content-type": "application/json"
+          },
+          body: JSON.stringify(payload)
+        }),
+        new Promise<never>((_, reject) => {
+          setTimeout(() => reject(new Error(`Model request timed out after ${timeoutMs}ms`)), timeoutMs);
+        })
+      ]);
+
+      const content = extractContent(result, logger, input.context);
+      const normalized = normalizeJsonEnvelope(content);
+
+      logger.info("model_request_succeeded", {
+        ...input.context,
+        rawContentPreview: content,
+        normalizedPreview: normalized
+      });
+
+      return normalized;
+    } catch (error) {
+      logger.error("model_request_failed", {
+        ...input.context,
+        message: error instanceof Error ? error.message : "Unknown model error"
+      });
+      throw error;
+    }
+  }
+
   return {
     async completeJson(systemPrompt: string, userPrompt: string, context: LogDetails = {}) {
       const payload = {
@@ -55,53 +113,19 @@ export function createModelService({
         response_format: { type: "json_object" }
       };
 
-      logger.info("model_request_started", {
-        ...context,
-        baseUrl,
-        modelName,
-        timeoutMs,
-        systemPromptPreview: systemPrompt,
-        userPromptPreview: userPrompt
-      });
+      return requestModel(payload, { systemPrompt, userPrompt, context });
+    },
 
-      try {
-        const result = await Promise.race([
-          fetchJson(`${baseUrl}/chat/completions`, {
-            method: "POST",
-            headers: {
-              authorization: `Bearer ${apiKey}`,
-              "content-type": "application/json"
-            },
-            body: JSON.stringify(payload)
-          }),
-          new Promise<never>((_, reject) => {
-            setTimeout(() => reject(new Error(`Model request timed out after ${timeoutMs}ms`)), timeoutMs);
-          })
-        ]);
+    async completeText(systemPrompt: string, userPrompt: string, context: LogDetails = {}) {
+      const payload = {
+        model: modelName,
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userPrompt }
+        ]
+      };
 
-        const content = result.choices?.[0]?.message?.content;
-
-        if (!content) {
-          logger.error("model_response_missing_content", context);
-          throw new Error("Model response did not contain message content");
-        }
-
-        const normalized = normalizeJsonEnvelope(content);
-
-        logger.info("model_request_succeeded", {
-          ...context,
-          rawContentPreview: content,
-          normalizedPreview: normalized
-        });
-
-        return normalized;
-      } catch (error) {
-        logger.error("model_request_failed", {
-          ...context,
-          message: error instanceof Error ? error.message : "Unknown model error"
-        });
-        throw error;
-      }
+      return requestModel(payload, { systemPrompt, userPrompt, context });
     }
   };
 }
