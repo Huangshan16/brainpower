@@ -6,6 +6,11 @@ create table if not exists people (
   tags text not null default '[]',
   status text not null check (status in ('needs_research', 'researching', 'ready_to_distill', 'ready_to_evaluate')),
   notes text,
+  origin_type text not null default 'seed' check (origin_type in ('seed', 'nuwa_import', 'manual', 'distilled')),
+  origin_ref text,
+  persona_kind text not null default 'person' check (persona_kind in ('person', 'topic')),
+  is_archived integer not null default 0,
+  is_deleted integer not null default 0,
   created_at text not null default current_timestamp,
   updated_at text not null default current_timestamp
 );
@@ -81,4 +86,23 @@ create table if not exists jobs (
   error text,
   created_at text not null,
   updated_at text not null
+);
+
+create table if not exists conversations (
+  id text primary key,
+  title text not null,
+  mode text not null check (mode in ('direct', 'group')),
+  status text not null check (status in ('active', 'stopped', 'archived')),
+  created_at text not null default current_timestamp,
+  updated_at text not null default current_timestamp
+);
+
+create table if not exists conversation_participants (
+  conversation_id text not null,
+  person_id text not null,
+  skill_id text not null,
+  join_source text not null,
+  position integer not null,
+  is_active integer not null default 1,
+  primary key (conversation_id, person_id, skill_id)
 );

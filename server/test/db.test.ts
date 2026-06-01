@@ -29,6 +29,8 @@ describe("database schema", () => {
         .all() as Array<{ name: string }>;
 
       expect(columnNames(rows)).toEqual([
+        "conversation_participants",
+        "conversations",
         "critiques",
         "evaluations",
         "fragments",
@@ -66,6 +68,46 @@ describe("database schema", () => {
       db.prepare(
         "insert into jobs (id, type, status, input, output, created_at, updated_at) values (?, ?, ?, ?, ?, ?, ?)"
       ).run("job-1", "crawl", "queued", "[]", "[]", "2026-06-01T00:00:00.000Z", "2026-06-01T00:00:00.000Z");
+    } finally {
+      db.close();
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("creates persona metadata fields and conversation tables", () => {
+    const dir = mkdtempSync(join(tmpdir(), "brainpower-db-"));
+    const db = openDatabase(join(dir, "test.sqlite"));
+
+    try {
+      migrate(db);
+      migrate(db);
+
+      const peopleColumns = db.prepare("pragma table_info(people)").all() as Array<{ name: string }>;
+      const conversationColumns = db.prepare("pragma table_info(conversations)").all() as Array<{ name: string }>;
+      const participantColumns = db.prepare("pragma table_info(conversation_participants)").all() as Array<{ name: string }>;
+
+      expect(columnNames(peopleColumns)).toEqual(
+        expect.arrayContaining([
+          "origin_type",
+          "origin_ref",
+          "persona_kind",
+          "is_archived",
+          "is_deleted"
+        ])
+      );
+      expect(columnNames(conversationColumns)).toEqual(
+        expect.arrayContaining(["id", "title", "mode", "status", "created_at", "updated_at"])
+      );
+      expect(columnNames(participantColumns)).toEqual(
+        expect.arrayContaining([
+          "conversation_id",
+          "person_id",
+          "skill_id",
+          "join_source",
+          "position",
+          "is_active"
+        ])
+      );
     } finally {
       db.close();
       rmSync(dir, { recursive: true, force: true });

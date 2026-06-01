@@ -1,19 +1,56 @@
 /**
  * [INPUT]: 依赖 zod 的运行时 schema 与类型推导能力
- * [OUTPUT]: 对外提供 PersonSchema、SourceSchema、FragmentSchema、SkillSchema、EvaluationSchema、CritiqueSchema、JobSchema 与类型
+ * [OUTPUT]: 对外提供 PersonaSchema/PersonSchema、ConversationSchema、MessageSchema、SourceSchema、FragmentSchema、SkillSchema、EvaluationSchema、CritiqueSchema、JobSchema 与类型
  * [POS]: shared 的契约中心，被前端 API client 与后端服务共同消费
  * [PROTOCOL]: 变更时更新此头部，然后检查 AGENTS.md
  */
 import { z } from "zod";
 
-export const PersonSchema = z.object({
+export const PersonaSchema = z.object({
   id: z.string(),
   name: z.string(),
   role: z.enum(["investor", "entrepreneur", "ai_builder"]),
   region: z.string(),
   tags: z.array(z.string()),
   status: z.enum(["needs_research", "researching", "ready_to_distill", "ready_to_evaluate"]),
-  notes: z.string().optional()
+  notes: z.string().optional(),
+  originType: z.enum(["seed", "nuwa_import", "manual", "distilled"]),
+  originRef: z.string().nullable(),
+  personaKind: z.enum(["person", "topic"]),
+  isArchived: z.boolean(),
+  isDeleted: z.boolean()
+});
+
+export const PersonSchema = PersonaSchema;
+
+export const ConversationSchema = z.object({
+  id: z.string(),
+  title: z.string(),
+  mode: z.enum(["direct", "group"]),
+  status: z.enum(["active", "stopped", "archived"]),
+  createdAt: z.string(),
+  updatedAt: z.string()
+});
+
+export const ConversationParticipantSchema = z.object({
+  conversationId: z.string(),
+  personId: z.string(),
+  skillId: z.string(),
+  joinSource: z.string(),
+  position: z.number().int().nonnegative(),
+  isActive: z.boolean()
+});
+
+export const MessageSchema = z.object({
+  id: z.string(),
+  conversationId: z.string(),
+  senderType: z.enum(["user", "persona", "system"]),
+  senderId: z.string(),
+  content: z.string(),
+  roundIndex: z.number().int().nonnegative(),
+  replyToMessageId: z.string().nullable(),
+  meta: z.record(z.any()).default({}),
+  createdAt: z.string()
 });
 
 export const SourceSchema = z.object({
@@ -90,6 +127,10 @@ export const JobSchema = z.object({
 });
 
 export type Person = z.infer<typeof PersonSchema>;
+export type Persona = z.infer<typeof PersonaSchema>;
+export type Conversation = z.infer<typeof ConversationSchema>;
+export type ConversationParticipant = z.infer<typeof ConversationParticipantSchema>;
+export type Message = z.infer<typeof MessageSchema>;
 export type Source = z.infer<typeof SourceSchema>;
 export type Fragment = z.infer<typeof FragmentSchema>;
 export type Skill = z.infer<typeof SkillSchema>;
