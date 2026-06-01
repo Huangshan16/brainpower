@@ -113,7 +113,7 @@ brainpower/
    - `critiques`
    - `jobs`
 
-项目的核心约束是：**分表、分服务、分 UI 面板**。  
+项目的核心约束是：**分表、分服务、分 UI 面板**。
 这不是文档口号，而是防止研究任务、资料片段、Skill 蒸馏、评审输出互相污染的必要边界。
 
 ## 快速开始
@@ -173,17 +173,17 @@ http://localhost:5173/
 
 ## 环境变量说明
 
-| 变量名 | 说明 | 默认值 |
-| --- | --- | --- |
-| `PORT` | 后端服务端口 | `4174` |
-| `DATABASE_PATH` | SQLite 文件路径 | `./data/brainpower.sqlite` |
-| `MODEL_BASE_URL` | OpenAI-compatible API 基地址 | `https://api.openai.com/v1` |
-| `MODEL_API_KEY` | 模型 API Key | 无 |
-| `MODEL_NAME` | 默认模型名 | `gpt-4.1-mini` |
-| `MODEL_TIMEOUT_MS` | 单次模型请求超时毫秒数 | `30000` |
-| `LOG_FILE_PATH` | 后端结构化日志文件路径 | `logs/backend.ndjson` |
-| `CRAWLER_USER_AGENT` | 采集请求 User-Agent | `brainpower-local-research/0.1` |
-| `CRAWLER_RATE_LIMIT_MS` | 采集限速间隔 | `1200` |
+| 变量名                    | 说明                         | 默认值                            |
+| ------------------------- | ---------------------------- | --------------------------------- |
+| `PORT`                  | 后端服务端口                 | `4174`                          |
+| `DATABASE_PATH`         | SQLite 文件路径              | `./data/brainpower.sqlite`      |
+| `MODEL_BASE_URL`        | OpenAI-compatible API 基地址 | `https://api.openai.com/v1`     |
+| `MODEL_API_KEY`         | 模型 API Key                 | 无                                |
+| `MODEL_NAME`            | 默认模型名                   | `gpt-4.1-mini`                  |
+| `MODEL_TIMEOUT_MS`      | 单次模型请求超时毫秒数       | `30000`                         |
+| `LOG_FILE_PATH`         | 后端结构化日志文件路径       | `logs/backend.ndjson`           |
+| `CRAWLER_USER_AGENT`    | 采集请求 User-Agent          | `brainpower-local-research/0.1` |
+| `CRAWLER_RATE_LIMIT_MS` | 采集限速间隔                 | `1200`                          |
 
 ## 可用脚本
 
@@ -225,12 +225,12 @@ npm run lint        # TypeScript 类型检查
 
 ### 1. 证据优先
 
-任何“数字人物”的输出都应尽量附带引用、证据与诚实边界。  
+任何“数字人物”的输出都应尽量附带引用、证据与诚实边界。
 没有来源的强判断，很容易从研究工具滑向表演工具。
 
 ### 2. 快照优先于过度外键
 
-像 `evaluations.person_id`、`skill_id` 这类评审上下文字段，在首版中更适合作为快照保留；真正不可替代的关系再上强外键。  
+像 `evaluations.person_id`、`skill_id` 这类评审上下文字段，在首版中更适合作为快照保留；真正不可替代的关系再上强外键。
 否则演进和测试都会被数据库约束绑死。
 
 ### 3. 特殊情况尽量通过结构消失
@@ -279,7 +279,7 @@ Playwright 浏览器录证测试，负责真实交互层验收。
 
 ### `docs/`
 
-项目的规格、计划、记忆与架构镜像。  
+项目的规格、计划、记忆与架构镜像。
 这个仓库执行 GEB 分形文档协议：代码结构变化，文档必须同步变化。
 
 ## 已知问题
@@ -306,8 +306,3 @@ Playwright 浏览器录证测试，负责真实交互层验收。
 - [ ] 完善 evaluation / critique 链路的前端反馈
 - [ ] 打通前后端联调默认配置
 - [ ] 增加更多 e2e 浏览器录证场景
-
-## License
-
-当前仓库尚未附带正式 License 文件。  
-如果准备公开开源，建议尽快补齐 `LICENSE`，至少明确是 MIT、Apache-2.0 还是其他条款。
