@@ -74,7 +74,7 @@ describe("database schema", () => {
     }
   });
 
-  test("creates persona metadata fields and conversation tables", () => {
+  test("enforces persona and participant constraints on a fresh schema", () => {
     const dir = mkdtempSync(join(tmpdir(), "brainpower-db-"));
     const db = openDatabase(join(dir, "test.sqlite"));
 
@@ -82,9 +82,60 @@ describe("database schema", () => {
       migrate(db);
       migrate(db);
 
+      db.prepare(
+        "insert into people (id, name, role, region, tags, status, notes, origin_type, origin_ref, persona_kind, is_archived, is_deleted, created_at, updated_at) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+      ).run(
+        "person-1",
+        "Ada",
+        "investor",
+        "US",
+        "[]",
+        "needs_research",
+        null,
+        "seed",
+        null,
+        "person",
+        0,
+        0,
+        "2026-06-01T00:00:00.000Z",
+        "2026-06-01T00:00:00.000Z"
+      );
+      db.prepare(
+        "insert into skills (id, person_id, version, mental_models_json, heuristics_json, voice_dna_json, anti_patterns_json, honesty_boundaries_json, citations_json, created_at) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+      ).run(
+        "skill-1",
+        "person-1",
+        1,
+        "[]",
+        "[]",
+        "[]",
+        "[]",
+        "[]",
+        "[]",
+        "2026-06-01T00:00:00.000Z"
+      );
+      db.prepare(
+        "insert into conversations (id, title, mode, status, created_at, updated_at) values (?, ?, ?, ?, ?, ?)"
+      ).run(
+        "conv-1",
+        "Test Conversation",
+        "group",
+        "active",
+        "2026-06-01T00:00:00.000Z",
+        "2026-06-01T00:00:00.000Z"
+      );
+      db.prepare(
+        "insert into conversation_participants (conversation_id, person_id, skill_id, join_source, position, is_active) values (?, ?, ?, ?, ?, ?)"
+      ).run("conv-1", "person-1", "skill-1", "manual", 0, 1);
+
       const peopleColumns = db.prepare("pragma table_info(people)").all() as Array<{ name: string }>;
       const conversationColumns = db.prepare("pragma table_info(conversations)").all() as Array<{ name: string }>;
       const participantColumns = db.prepare("pragma table_info(conversation_participants)").all() as Array<{ name: string }>;
+      const foreignKeys = db.prepare("pragma foreign_key_list(conversation_participants)").all() as Array<{
+        from: string;
+        table: string;
+        to: string;
+      }>;
 
       expect(columnNames(peopleColumns)).toEqual(
         expect.arrayContaining([
@@ -108,6 +159,150 @@ describe("database schema", () => {
           "is_active"
         ])
       );
+
+      expect(foreignKeys).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ from: "conversation_id", table: "conversations", to: "id" }),
+          expect.objectContaining({ from: "person_id", table: "people", to: "id" }),
+          expect.objectContaining({ from: "skill_id", table: "skills", to: "id" })
+        ])
+      );
+
+      expect(() =>
+        db
+          .prepare(
+            "insert into conversation_participants (conversation_id, person_id, skill_id, join_source, position, is_active) values (?, ?, ?, ?, ?, ?)"
+          )
+          .run("conv-1", "missing-person", "skill-1", "manual", 0, 1)
+      ).toThrow();
+      expect(() =>
+        db
+          .prepare(
+            "insert into conversation_participants (conversation_id, person_id, skill_id, join_source, position, is_active) values (?, ?, ?, ?, ?, ?)"
+          )
+          .run("conv-1", "person-1", "skill-1", "manual", -1, 1)
+      ).toThrow();
+      expect(() =>
+        db
+          .prepare(
+            "insert into people (id, name, role, region, tags, status, origin_type, origin_ref, persona_kind, is_archived, is_deleted, created_at, updated_at) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+          )
+          .run(
+            "person-2",
+            "Grace",
+            "entrepreneur",
+            "US",
+            "[]",
+            "needs_research",
+            "seed",
+            null,
+            "person",
+            2,
+            0,
+            "2026-06-01T00:00:00.000Z",
+            "2026-06-01T00:00:00.000Z"
+          )
+      ).toThrow();
+      expect(() =>
+        db
+          .prepare(
+            "update conversation_participants set is_active = ? where conversation_id = ? and person_id = ? and skill_id = ?"
+          )
+          .run(2, "conv-1", "person-1", "skill-1")
+      ).toThrow();
+    } finally {
+      db.close();
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("upgrades a legacy people table without rebuilding existing data", () => {
+    const dir = mkdtempSync(join(tmpdir(), "brainpower-db-"));
+    const db = openDatabase(join(dir, "test.sqlite"));
+
+    try {
+      db.exec(`
+        create table people (
+          id text primary key,
+          name text not null,
+          role text not null,
+          region text not null,
+          tags text not null default '[]',
+          status text not null,
+          notes text,
+          created_at text not null,
+          updated_at text not null
+        );
+      `);
+      db.prepare(
+        "insert into people (id, name, role, region, tags, status, notes, created_at, updated_at) values (?, ?, ?, ?, ?, ?, ?, ?, ?)"
+      ).run(
+        "legacy-person",
+        "Linus",
+        "investor",
+        "US",
+        "[]",
+        "needs_research",
+        "legacy row",
+        "2026-06-01T00:00:00.000Z",
+        "2026-06-01T00:00:00.000Z"
+      );
+
+      migrate(db);
+
+      const upgradedPeopleColumns = db.prepare("pragma table_info(people)").all() as Array<{ name: string }>;
+      expect(columnNames(upgradedPeopleColumns)).toEqual(
+        expect.arrayContaining([
+          "origin_type",
+          "origin_ref",
+          "persona_kind",
+          "is_archived",
+          "is_deleted"
+        ])
+      );
+
+      const upgradedRow = db
+        .prepare(
+          "select id, origin_type, origin_ref, persona_kind, is_archived, is_deleted from people where id = ?"
+        )
+        .get("legacy-person") as {
+        id: string;
+        origin_type: string;
+        origin_ref: string | null;
+        persona_kind: string;
+        is_archived: number;
+        is_deleted: number;
+      };
+
+      expect(upgradedRow).toEqual({
+        id: "legacy-person",
+        origin_type: "seed",
+        origin_ref: null,
+        persona_kind: "person",
+        is_archived: 0,
+        is_deleted: 0
+      });
+
+      expect(() =>
+        db.prepare("update people set is_archived = ? where id = ?").run(2, "legacy-person")
+      ).toThrow();
+      expect(() =>
+        db.prepare("insert into people (id, name, role, region, tags, status, origin_type, persona_kind, is_archived, is_deleted, created_at, updated_at) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
+          .run(
+            "legacy-invalid",
+            "Invalid",
+            "investor",
+            "US",
+            "[]",
+            "needs_research",
+            "manual",
+            "topic",
+            1,
+            2,
+            "2026-06-01T00:00:00.000Z",
+            "2026-06-01T00:00:00.000Z"
+          )
+      ).toThrow();
     } finally {
       db.close();
       rmSync(dir, { recursive: true, force: true });

@@ -9,8 +9,8 @@ create table if not exists people (
   origin_type text not null default 'seed' check (origin_type in ('seed', 'nuwa_import', 'manual', 'distilled')),
   origin_ref text,
   persona_kind text not null default 'person' check (persona_kind in ('person', 'topic')),
-  is_archived integer not null default 0,
-  is_deleted integer not null default 0,
+  is_archived integer not null default 0 check (is_archived in (0, 1)),
+  is_deleted integer not null default 0 check (is_deleted in (0, 1)),
   created_at text not null default current_timestamp,
   updated_at text not null default current_timestamp
 );
@@ -98,11 +98,11 @@ create table if not exists conversations (
 );
 
 create table if not exists conversation_participants (
-  conversation_id text not null,
-  person_id text not null,
-  skill_id text not null,
+  conversation_id text not null references conversations(id) on delete cascade,
+  person_id text not null references people(id) on delete cascade,
+  skill_id text not null references skills(id) on delete cascade,
   join_source text not null,
-  position integer not null,
-  is_active integer not null default 1,
+  position integer not null check (position >= 0),
+  is_active integer not null default 1 check (is_active in (0, 1)),
   primary key (conversation_id, person_id, skill_id)
 );

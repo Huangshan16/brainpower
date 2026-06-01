@@ -6,22 +6,23 @@
  */
 import { z } from "zod";
 
-export const PersonaSchema = z.object({
+export const PersonSchema = z.object({
   id: z.string(),
   name: z.string(),
   role: z.enum(["investor", "entrepreneur", "ai_builder"]),
   region: z.string(),
   tags: z.array(z.string()),
   status: z.enum(["needs_research", "researching", "ready_to_distill", "ready_to_evaluate"]),
-  notes: z.string().optional(),
+  notes: z.string().optional()
+});
+
+export const PersonaSchema = PersonSchema.extend({
   originType: z.enum(["seed", "nuwa_import", "manual", "distilled"]),
   originRef: z.string().nullable(),
   personaKind: z.enum(["person", "topic"]),
   isArchived: z.boolean(),
   isDeleted: z.boolean()
 });
-
-export const PersonSchema = PersonaSchema;
 
 export const ConversationSchema = z.object({
   id: z.string(),
