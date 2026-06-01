@@ -1,6 +1,6 @@
 /**
  * [INPUT]: 依赖 better-sqlite3 持久化资料库实体，依赖 shared/schemas 统一前后端数据契约
- * [OUTPUT]: 对外提供 createLibraryService 工厂与人物、来源、片段读写方法
+ * [OUTPUT]: 对外提供 createLibraryService 工厂与人物、来源、片段读写方法，片段归属从 source 派生
  * [POS]: server/services 的资料库业务边界，被 Express 路由与服务测试消费
  * [PROTOCOL]: 变更时更新此头部，然后检查 AGENTS.md
  */
@@ -122,6 +122,16 @@ function mapFragment(row: FragmentRow): Fragment {
   });
 }
 
+function getSourceOwner(db: Database.Database, sourceId: string) {
+  const row = db.prepare("select person_id from sources where id = ?").get(sourceId) as { person_id: string } | undefined;
+
+  if (!row) {
+    throw new Error("Source not found");
+  }
+
+  return row.person_id;
+}
+
 export function createLibraryService(db: Database.Database) {
   return {
     createPerson(input: PersonInput): Person {
@@ -172,6 +182,11 @@ export function createLibraryService(db: Database.Database) {
     createFragment(input: FragmentInput): Fragment {
       const id = nanoid();
       const timestamp = now();
+      const personId = getSourceOwner(db, input.sourceId);
+
+      if (input.personId !== personId) {
+        throw new Error("Fragment personId must match source owner");
+      }
 
       db.prepare(
         `insert into fragments (id, source_id, person_id, content, summary, timeline_tag, evidence_type, created_at)
@@ -179,7 +194,7 @@ export function createLibraryService(db: Database.Database) {
       ).run(
         id,
         input.sourceId,
-        input.personId,
+        personId,
         input.content,
         input.summary,
         input.timelineTag,
