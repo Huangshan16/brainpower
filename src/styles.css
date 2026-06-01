@@ -111,6 +111,12 @@ button {
   margin-bottom: 16px;
 }
 
+.panel-actions {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+}
+
 .panel-header-top {
   display: flex;
   align-items: start;
@@ -125,6 +131,12 @@ button {
   min-height: 0;
   overflow: auto;
   padding-right: 4px;
+}
+
+.panel-empty {
+  border: 1px dashed rgba(232, 214, 184, 0.16);
+  border-radius: 8px;
+  padding: 14px;
 }
 
 .person-card {

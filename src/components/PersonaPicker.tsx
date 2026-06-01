@@ -23,15 +23,19 @@ export function PersonaPicker({
       <div className="picker-row">
         <label className="picker-field">
           <span>添加人物</span>
-          <select onChange={(event) => onSelect(event.target.value)} value={selectedPersonId}>
-            {people.map((person) => (
-              <option key={person.id} value={person.id}>
-                {person.name}
-              </option>
-            ))}
+          <select disabled={people.length === 0} onChange={(event) => onSelect(event.target.value)} value={selectedPersonId}>
+            {people.length === 0 ? (
+              <option value="">人物库为空</option>
+            ) : (
+              people.map((person) => (
+                <option key={person.id} value={person.id}>
+                  {person.name}
+                </option>
+              ))
+            )}
           </select>
         </label>
-        <button onClick={onAdd} type="button">
+        <button disabled={people.length === 0} onClick={onAdd} type="button">
           加入会话
         </button>
       </div>

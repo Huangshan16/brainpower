@@ -1,10 +1,10 @@
 /**
- * [INPUT]: 依赖 React 状态、ApiClient seam 与人物库摘要驱动对话工作台
+ * [INPUT]: 依赖 React 状态与副作用、ApiClient seam 与人物库摘要驱动对话工作台
  * [OUTPUT]: 对外提供 ConversationWorkspace 组件
  * [POS]: src/components 的对话主工作区，被 App 消费
  * [PROTOCOL]: 变更时更新此头部，然后检查 AGENTS.md
  */
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { ApiClient } from "../api/client";
 import { Composer } from "./Composer";
 import { ConversationHeader } from "./ConversationHeader";
@@ -56,6 +56,20 @@ export function ConversationWorkspace({
   const [jobNote, setJobNote] = useState("已连接对话工作台。下一步是添加人物并发起第一条消息。");
 
   const peopleById = useMemo(() => new Map(libraryPeople.map((person) => [person.id, person.name])), [libraryPeople]);
+
+  useEffect(() => {
+    if (libraryPeople.length === 0) {
+      if (selectedAddPersonId) {
+        setSelectedAddPersonId("");
+      }
+
+      return;
+    }
+
+    if (!selectedAddPersonId || !peopleById.has(selectedAddPersonId)) {
+      setSelectedAddPersonId(selectedPersonId && peopleById.has(selectedPersonId) ? selectedPersonId : libraryPeople[0].id);
+    }
+  }, [libraryPeople, peopleById, selectedAddPersonId, selectedPersonId]);
 
   async function ensureConversation() {
     if (conversationId) {

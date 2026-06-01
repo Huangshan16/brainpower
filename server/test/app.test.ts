@@ -64,8 +64,13 @@ describe("app routes", () => {
         nuwaGateway: {
           fetchReadme: async () => `
 ## 已蒸馏人物
-- Paul Graham
-- 张一鸣
+
+### 人物Skill
+
+| 人物 | 领域 | 独立仓库 | 一键安装 |
+|------|------|---------|---------|
+| 🔥 **Paul Graham** | 创业/写作/产品/人生哲学 | [paul-graham-skill](https://github.com/alchaincyf/paul-graham-skill) | \`npx skills add alchaincyf/paul-graham-skill\` |
+| 🔥 **张一鸣** | 产品/组织/全球化/人才 | [zhang-yiming-skill](https://github.com/alchaincyf/zhang-yiming-skill) | \`npx skills add alchaincyf/zhang-yiming-skill\` |
 `
         }
       });
@@ -139,7 +144,12 @@ describe("app routes", () => {
         nuwaGateway: {
           fetchReadme: async () => `
 ## 已蒸馏人物
-- Paul Graham
+
+### 人物Skill
+
+| 人物 | 领域 | 独立仓库 | 一键安装 |
+|------|------|---------|---------|
+| 🔥 **Paul Graham** | 创业/写作/产品/人生哲学 | [paul-graham-skill](https://github.com/alchaincyf/paul-graham-skill) | \`npx skills add alchaincyf/paul-graham-skill\` |
 `
         }
       });
@@ -221,7 +231,12 @@ describe("app routes", () => {
         nuwaGateway: {
           fetchReadme: async () => `
 ## 已蒸馏人物
-- Paul Graham
+
+### 人物Skill
+
+| 人物 | 领域 | 独立仓库 | 一键安装 |
+|------|------|---------|---------|
+| 🔥 **Paul Graham** | 创业/写作/产品/人生哲学 | [paul-graham-skill](https://github.com/alchaincyf/paul-graham-skill) | \`npx skills add alchaincyf/paul-graham-skill\` |
 `
         }
       });

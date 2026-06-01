@@ -35,15 +35,20 @@ export function EvidencePanel({
             <span className="sr-only">右侧人物切换</span>
             <select
               className="panel-select"
+              disabled={people.length === 0}
               id={selectorId}
               onChange={(event) => onSelect(event.target.value)}
               value={selectedPersonId}
             >
-              {people.map((person) => (
-                <option key={person.id} value={person.id}>
-                  {person.name}
-                </option>
-              ))}
+              {people.length === 0 ? (
+                <option value="">暂无人物</option>
+              ) : (
+                people.map((person) => (
+                  <option key={person.id} value={person.id}>
+                    {person.name}
+                  </option>
+                ))
+              )}
             </select>
           </label>
         </div>

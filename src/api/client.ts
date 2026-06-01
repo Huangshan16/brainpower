@@ -1,10 +1,15 @@
 /**
- * [INPUT]: 依赖浏览器 fetch 调用本地 /api 后端
+ * [INPUT]: 依赖浏览器 fetch 调用本地 /api 后端，依赖 shared Persona 类型约束人物库响应
  * [OUTPUT]: 对外提供 ApiClient 类型与 createApiClient 工厂
  * [POS]: src/api 的 HTTP seam，被 App 与工作区组件消费
  * [PROTOCOL]: 变更时更新此头部，然后检查 AGENTS.md
  */
+import type { Persona } from "../../shared/schemas";
+
 export type ApiClient = {
+  listPersonas(): Promise<{ people: Persona[] }>;
+  importNuwaPersonas(): Promise<{ imported: Persona[] }>;
+  deletePersona(input: { personId: string }): Promise<void>;
   crawlSeedUrl(input: { personId: string; url: string }): Promise<{ fragments: unknown[] }>;
   distillSkill(input: { personId: string }): Promise<unknown>;
   evaluateProject(input: { project: { title: string; brief: string }; personId: string; skillId: string }): Promise<unknown>;
@@ -79,6 +84,15 @@ async function deleteRequest(path: string) {
 
 export function createApiClient(): ApiClient {
   return {
+    listPersonas() {
+      return getJson("/api/personas");
+    },
+    importNuwaPersonas() {
+      return postJson("/api/personas/import/nuwa", {});
+    },
+    deletePersona(input) {
+      return deleteRequest(`/api/personas/${input.personId}`);
+    },
     crawlSeedUrl(input) {
       return postJson("/api/research/crawl", input);
     },
