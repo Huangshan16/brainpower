@@ -1,18 +1,56 @@
 /**
- * [INPUT]: 依赖 React Testing Library、user-event 与 ConversationWorkspace 验证对话行为
- * [OUTPUT]: 对外提供 ConversationWorkspace 的加入人物、单聊与群聊停止回归测试
+ * [INPUT]: 依赖 React Testing Library、user-event 与对话控制器组合视图验证对话行为
+ * [OUTPUT]: 对外提供对话主工作区的加入人物、单聊与群聊停止回归测试
  * [POS]: src/test 的对话工作台测试，约束前端对话骨架
  * [PROTOCOL]: 变更时更新此头部，然后检查 AGENTS.md
  */
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, test } from "vitest";
+import type { ApiClient } from "../api/client";
+import { ConversationSidePanel } from "../components/ConversationSidePanel";
 import { ConversationWorkspace } from "../components/ConversationWorkspace";
+import { useConversationController } from "../components/useConversationController";
 
 const libraryPeople = [
   { id: "paul", name: "Paul Graham" },
   { id: "jensen", name: "黄仁勋" }
 ];
+
+function ConversationHarness({ api, selectedPersonId = "paul" }: { api: ApiClient; selectedPersonId?: string }) {
+  const conversation = useConversationController({
+    api,
+    libraryPeople,
+    selectedPersonId
+  });
+
+  return (
+    <div>
+      <ConversationWorkspace
+        directDisabled={conversation.directDisabled}
+        disabled={conversation.isComposerDisabled}
+        draft={conversation.draft}
+        groupDisabled={conversation.groupDisabled}
+        messages={conversation.messages}
+        mode={conversation.mode}
+        onChange={conversation.setDraft}
+        onModeChange={conversation.setMode}
+        onStop={() => void conversation.handleStop()}
+        onSubmit={() => void conversation.handleSubmit()}
+        runState={conversation.runState}
+      />
+      <ConversationSidePanel
+        note={conversation.jobNote}
+        onAdd={() => void conversation.handleAddParticipant()}
+        onRemove={(participant) => void conversation.handleRemoveParticipant(participant)}
+        onSelect={conversation.setSelectedAddPersonId}
+        participants={conversation.participants}
+        people={libraryPeople}
+        selectedPersonId={conversation.selectedAddPersonId}
+      />
+    </div>
+  );
+}
 
 describe("ConversationWorkspace", () => {
   test("adds a persona to the conversation and sends a direct message", async () => {
@@ -41,11 +79,11 @@ describe("ConversationWorkspace", () => {
       stopGroupRun: async () => undefined
     };
 
-    render(<ConversationWorkspace api={api} libraryPeople={libraryPeople} selectedPersonId="paul" />);
+    render(<ConversationHarness api={api as ApiClient} />);
 
     await userEvent.clear(screen.getByLabelText("输入消息"));
     await userEvent.type(screen.getByLabelText("输入消息"), "你会投这个项目吗？");
-    await userEvent.click(screen.getByRole("button", { name: "单聊" }));
+    await userEvent.click(screen.getByRole("button", { name: "发送" }));
 
     expect(await screen.findByText("Paul Graham", { selector: "strong" })).toBeInTheDocument();
     expect(await screen.findByText("先验证分发效率。")).toBeInTheDocument();
@@ -95,12 +133,13 @@ describe("ConversationWorkspace", () => {
       }
     };
 
-    render(<ConversationWorkspace api={api} libraryPeople={libraryPeople} selectedPersonId="paul" />);
+    render(<ConversationHarness api={api as ApiClient} />);
 
     await userEvent.click(screen.getByRole("button", { name: "加入会话" }));
     await userEvent.selectOptions(screen.getByLabelText("添加人物"), "jensen");
     await userEvent.click(screen.getByRole("button", { name: "加入会话" }));
     await userEvent.click(screen.getByRole("button", { name: "群聊" }));
+    await userEvent.click(screen.getByRole("button", { name: "发起群聊" }));
     expect(await screen.findByText(/群聊进行中/i)).toBeInTheDocument();
 
     await userEvent.click(screen.getByRole("button", { name: "终止群聊" }));

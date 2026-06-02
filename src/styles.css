@@ -310,7 +310,7 @@ button {
 }
 
 .conversation-workspace {
-  grid-template-rows: auto auto minmax(0, 1fr) auto auto auto;
+  grid-template-rows: auto minmax(0, 1fr);
 }
 
 .conversation-header,
@@ -320,7 +320,6 @@ button {
 }
 
 .conversation-header-actions,
-.composer-actions,
 .picker-row,
 .section-heading {
   display: flex;
@@ -335,6 +334,21 @@ button {
   padding: 6px 10px;
   color: #d9c9b0;
   font-size: 0.8rem;
+}
+
+.conversation-side {
+  min-height: 0;
+}
+
+.conversation-side {
+  display: grid;
+  gap: 14px;
+  align-content: start;
+}
+
+.conversation-side {
+  overflow: auto;
+  padding-right: 4px;
 }
 
 .participant-tray {
@@ -362,6 +376,48 @@ button {
   overflow: auto;
   padding-right: 4px;
   align-content: start;
+}
+
+.composer-shell {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 168px;
+  gap: 12px;
+  align-items: stretch;
+}
+
+.composer-field {
+  min-height: 0;
+}
+
+.composer-field textarea {
+  min-height: 160px;
+  resize: vertical;
+}
+
+.composer-side {
+  display: grid;
+  gap: 12px;
+  align-content: end;
+}
+
+.mode-switch {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+  padding: 4px;
+  border: 1px solid rgba(232, 214, 184, 0.12);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.mode-switch button {
+  background: transparent !important;
+  color: #d8c8b2 !important;
+}
+
+.mode-switch button.is-active {
+  background: rgba(213, 161, 111, 0.2) !important;
+  color: #f3efe6 !important;
 }
 
 .message-card {
@@ -471,6 +527,15 @@ button {
   .person-list,
   .evidence-stack {
     overflow: visible;
+  }
+
+  .composer-shell {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .conversation-side {
+    overflow: visible;
+    padding-right: 0;
   }
 }
 

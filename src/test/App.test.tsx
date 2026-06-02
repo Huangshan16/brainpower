@@ -96,6 +96,7 @@ describe("App", () => {
     expect(within(view.container).getByRole("button", { name: "发送" })).toBeInTheDocument();
     expect(within(view.container).getByRole("button", { name: "单聊" })).toBeInTheDocument();
     expect(within(view.container).getByRole("button", { name: "群聊" })).toBeInTheDocument();
+    expect(within(view.container).getByRole("button", { name: "加入会话" })).toBeInTheDocument();
   });
 
   test("switches the evidence panel person from the dropdown", async () => {
@@ -128,7 +129,7 @@ describe("App", () => {
       />
     );
 
-    await userEvent.click(await screen.findByRole("button", { name: "同步女娲人物" }));
+    await userEvent.click(await screen.findByRole("button", { name: "同步预设人物" }));
 
     expect(await screen.findByText("Paul Graham", { selector: "strong" })).toBeInTheDocument();
   });

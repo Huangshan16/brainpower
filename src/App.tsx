@@ -6,11 +6,13 @@
  */
 import { useEffect, useMemo, useState } from "react";
 import { type ApiClient, createApiClient } from "./api/client";
+import { ConversationSidePanel } from "./components/ConversationSidePanel";
 import { ConversationWorkspace } from "./components/ConversationWorkspace";
 import { DistillWorkspace } from "./components/DistillWorkspace";
 import { EvidencePanel } from "./components/EvidencePanel";
 import { PeoplePanel } from "./components/PeoplePanel";
 import { ResearchWorkspace } from "./components/ResearchWorkspace";
+import { useConversationController } from "./components/useConversationController";
 import { WorkflowTabs, type Workflow } from "./components/WorkflowTabs";
 import type { Persona } from "../shared/schemas";
 
@@ -26,7 +28,7 @@ type DisplayPerson = {
 const roleLabelMap: Record<Persona["role"], string> = {
   investor: "投资人",
   entrepreneur: "创业者",
-  ai_builder: "AI 企业家"
+  ai_builder: "AI 先驱"
 };
 
 function toDisplayPeople(people: Persona[]): DisplayPerson[] {
@@ -47,7 +49,6 @@ function renderWorkspace(
     personName?: string;
     evidenceCount: number;
     api?: ApiClient;
-    libraryPeople: Array<{ id: string; name: string }>;
     onFragmentsUpdate: (count: number) => void;
   }
 ) {
@@ -66,11 +67,6 @@ function renderWorkspace(
   if (workflow === "Distill") {
     return <DistillWorkspace api={options.api} evidenceCount={options.evidenceCount} personId={options.personId} personName={options.personName} />;
   }
-
-  if (workflow === "Conversation") {
-    return <ConversationWorkspace api={options.api} libraryPeople={options.libraryPeople} selectedPersonId={options.personId} />;
-  }
-
   return (
     <ResearchWorkspace
       api={options.api}
@@ -91,6 +87,11 @@ export function App({ api = createApiClient() }: { api?: ApiClient }) {
 
   const selectedPerson = useMemo(() => people.find((person) => person.id === selectedPersonId) ?? null, [people, selectedPersonId]);
   const libraryPeople = useMemo(() => people.map(({ id, name }) => ({ id, name })), [people]);
+  const conversation = useConversationController({
+    api,
+    libraryPeople,
+    selectedPersonId: selectedPerson?.id ?? ""
+  });
 
   useEffect(() => {
     let isCancelled = false;
@@ -181,23 +182,56 @@ export function App({ api = createApiClient() }: { api?: ApiClient }) {
           selectedPersonId={selectedPersonId}
         />
         <section className="panel panel-workspace" aria-label="工作区">
-          {renderWorkspace(activeWorkflow, {
-            personId: selectedPerson?.id,
-            personName: selectedPerson?.name,
-            evidenceCount,
-            api,
-            libraryPeople,
-            onFragmentsUpdate: setEvidenceCount
-          })}
+          {activeWorkflow === "Conversation" && selectedPerson ? (
+            <ConversationWorkspace
+              directDisabled={conversation.directDisabled}
+              disabled={conversation.isComposerDisabled}
+              draft={conversation.draft}
+              groupDisabled={conversation.groupDisabled}
+              messages={conversation.messages}
+              mode={conversation.mode}
+              onChange={conversation.setDraft}
+              onModeChange={conversation.setMode}
+              onStop={() => void conversation.handleStop()}
+              onSubmit={() => void conversation.handleSubmit()}
+              runState={conversation.runState}
+            />
+          ) : (
+            renderWorkspace(activeWorkflow, {
+              personId: selectedPerson?.id,
+              personName: selectedPerson?.name,
+              evidenceCount,
+              api,
+              onFragmentsUpdate: setEvidenceCount
+            })
+          )}
         </section>
-        <EvidencePanel
-          activeWorkflow={activeWorkflow}
-          evidenceCount={evidenceCount}
-          onSelect={setSelectedPersonId}
-          people={libraryPeople}
-          personName={selectedPerson?.name ?? "未选择人物"}
-          selectedPersonId={selectedPersonId}
-        />
+        {activeWorkflow === "Conversation" ? (
+          <aside aria-label="对话侧栏" className="panel panel-conversation-side">
+            <div className="panel-header">
+              <p className="eyebrow">会话侧栏</p>
+              <h2>{selectedPerson?.name ?? "未选择人物"}</h2>
+            </div>
+            <ConversationSidePanel
+              note={conversation.jobNote}
+              onAdd={() => void conversation.handleAddParticipant()}
+              onRemove={(participant) => void conversation.handleRemoveParticipant(participant)}
+              onSelect={conversation.setSelectedAddPersonId}
+              participants={conversation.participants}
+              people={libraryPeople}
+              selectedPersonId={conversation.selectedAddPersonId}
+            />
+          </aside>
+        ) : (
+          <EvidencePanel
+            activeWorkflow={activeWorkflow}
+            evidenceCount={evidenceCount}
+            onSelect={setSelectedPersonId}
+            people={libraryPeople}
+            personName={selectedPerson?.name ?? "未选择人物"}
+            selectedPersonId={selectedPersonId}
+          />
+        )}
       </main>
     </div>
   );
