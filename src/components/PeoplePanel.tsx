@@ -44,7 +44,7 @@ export function PeoplePanel({
         <h2>人物矩阵</h2>
         <div className="panel-actions">
           <button disabled={isSyncing} onClick={onImportNuwa} type="button">
-            {isSyncing ? "同步中..." : "同步女娲人物"}
+            {isSyncing ? "同步中..." : "同步预设人物"}
           </button>
           <button className="secondary-button" disabled={!selectedPersonId || isDeleting} onClick={onDeleteSelected} type="button">
             {isDeleting ? "删除中..." : "删除当前人物"}
@@ -54,7 +54,7 @@ export function PeoplePanel({
       <div className="person-list">
         {people.length === 0 ? (
           <div className="panel-empty">
-            <p className="workspace-note">人物库还是空的。先同步女娲人物，再把真实人物接入会话与蒸馏流程。</p>
+            <p className="workspace-note">人物库还是空的。先同步预设![1780371899788](image/PeoplePanel/1780371899788.png)人物，再把真实人物接入会话与蒸馏流程。</p>
           </div>
         ) : (
           people.map((person) => (
